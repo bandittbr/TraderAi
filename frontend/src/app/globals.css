@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Variáveis globais ──────────────────────────────────────────────────────── */
+:root {
+  --color-bg: #0a0e1a;
+  --color-surface: #111827;
+  --color-surface-2: #1f2937;
+  --color-border: #1f2937;
+  --color-primary: #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-muted: #6b7280;
+  --color-text: #f9fafb;
+  --color-text-secondary: #9ca3af;
+}
+
+/* ── Reset e base ────────────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar personalizada ─────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* ── Animação de piscar para indicadores de status ───────────────────────────── */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.status-dot-online  { background-color: var(--color-success); }
+.status-dot-offline { background-color: var(--color-danger); animation: blink 1.5s infinite; }
+.status-dot-warning { background-color: var(--color-warning); animation: blink 2s infinite; }
+.status-dot-loading { background-color: var(--color-muted); animation: blink 1s infinite; }
