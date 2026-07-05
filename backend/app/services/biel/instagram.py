@@ -34,7 +34,10 @@ async def publish_image(
                 "access_token": access_token,
             }
         )
-        resp.raise_for_status()
+        if not resp.is_success:
+            error_body = resp.text
+            logger.error(f"[biel/instagram] Erro ao criar container: {resp.status_code} — {error_body}")
+            raise ValueError(f"Instagram container error {resp.status_code}: {error_body}")
         container_id = resp.json().get("id")
         if not container_id:
             raise ValueError(f"Instagram não retornou container_id: {resp.text}")
