@@ -51,7 +51,7 @@ export default function InfluencerHero({ metrics }: HeroProps) {
             {status.persona_name || "Biel"}
           </div>
           <div style={{ color: "#3d5a80", fontSize: 12, marginTop: 4 }}>
-            Instagram Agent · Gemini 2.0 Flash
+            Instagram Agent · Groq / Gemini
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
             <div style={{
