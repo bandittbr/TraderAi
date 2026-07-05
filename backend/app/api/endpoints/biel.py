@@ -33,6 +33,7 @@ class SetupRequest(BaseModel):
     app_secret: str
     posts_per_day: int = 4
     post_hours: str = "8,12,18,22"
+    instagram_account_id: str | None = None  # se fornecido, pula auto-detecção
 
 
 class PostRequest(BaseModel):
@@ -64,6 +65,7 @@ async def setup_biel(data: SetupRequest):
             access_token=data.access_token,
             app_id=data.app_id,
             app_secret=data.app_secret,
+            instagram_account_id_override=data.instagram_account_id,
         )
 
         ig_account_id = token.account_id

@@ -7,6 +7,7 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
     access_token: "",
     app_id: "",
     app_secret: "",
+    instagram_account_id: "",
     post_hours: "8,12,18,22",
   });
   const [loading, setLoading] = useState(false);
@@ -24,12 +25,13 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          gemini_api_key: form.gemini_api_key,
-          access_token:   form.access_token,
-          app_id:         form.app_id,
-          app_secret:     form.app_secret,
-          post_hours:     form.post_hours,
-          posts_per_day:  form.post_hours.split(",").length,
+          gemini_api_key:        form.gemini_api_key,
+          access_token:          form.access_token,
+          app_id:                form.app_id,
+          app_secret:            form.app_secret,
+          instagram_account_id:  form.instagram_account_id || undefined,
+          post_hours:            form.post_hours,
+          posts_per_day:         form.post_hours.split(",").length,
         }),
       });
       const j = await r.json();
@@ -73,6 +75,25 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
       {field("Instagram Access Token", "access_token", "EAAX...", "password")}
       {field("Facebook App ID", "app_id", "1654543728935583")}
       {field("Facebook App Secret", "app_secret", "dca45c43...", "password")}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <label style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase" }}>
+          Instagram Business Account ID <span style={{ color: "#1e3a5f" }}>(opcional — use se aparecer "unknown")</span>
+        </label>
+        <input
+          type="text"
+          value={form.instagram_account_id}
+          onChange={e => setForm(f => ({ ...f, instagram_account_id: e.target.value }))}
+          placeholder="ex: 17841400000000000"
+          style={{
+            background: "#060d1a", border: "1px solid #141c2e", borderRadius: 8,
+            color: "#c8d8e8", fontSize: 12, padding: "8px 10px", outline: "none",
+            fontFamily: "monospace",
+          }}
+        />
+        <div style={{ color: "#3d5a80", fontSize: 9 }}>
+          Encontre em: Meta for Developers → Graph API Explorer → GET /me/accounts?fields=instagram_business_account
+        </div>
+      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <label style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase" }}>Horários dos Posts (UTC)</label>

@@ -137,6 +137,7 @@ async def save_initial_token(
     access_token: str,
     app_id: str,
     app_secret: str,
+    instagram_account_id_override: str | None = None,
 ) -> BielToken:
     """
     Salva o token inicial no banco (já convertido para longa duração).
@@ -155,8 +156,12 @@ async def save_initial_token(
         long_token = access_token
         expires_at = now + timedelta(days=60)
 
-    # Buscar Instagram Account ID
-    ig_account_id = await get_instagram_account_id(long_token)
+    # Buscar Instagram Account ID (ou usar o fornecido manualmente)
+    if instagram_account_id_override and instagram_account_id_override.strip():
+        ig_account_id = instagram_account_id_override.strip()
+        logger.info(f"[biel/token] Usando Instagram Account ID manual: {ig_account_id}")
+    else:
+        ig_account_id = await get_instagram_account_id(long_token)
 
     async with AsyncSessionLocal() as session:
         token = BielToken(
