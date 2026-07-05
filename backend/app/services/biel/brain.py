@@ -1,6 +1,8 @@
 """
-Biel — Brain (Gemini 2.0 Flash)
-Gera textos com a personalidade do Biel usando Google Gemini API.
+Biel — Brain (Gemini 2.0 Flash ou Groq LLaMA 3)
+Detecção automática pelo prefixo da chave:
+  gsk_...  → Groq  (api.groq.com)
+  AIza/AQ. → Gemini (generativelanguage.googleapis.com)
 """
 
 import httpx
@@ -9,6 +11,8 @@ from app.logger import get_logger
 logger = get_logger(__name__)
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GROQ_API_URL   = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL     = "llama-3.3-70b-versatile"
 
 BIEL_SYSTEM_PROMPT = """
 Você é Biel, um agente de trading autônomo especialista em criptomoedas e futuros.
@@ -34,20 +38,29 @@ Nunca invente dados — use apenas o que foi fornecido no contexto.
 """
 
 TOPIC_PROMPTS = {
-    "market": "Comente sobre o estado atual do mercado com base nos dados fornecidos.",
-    "trade":  "Compartilhe os resultados recentes dos trades, incluindo wins e losses com honestidade.",
+    "market":  "Comente sobre o estado atual do mercado com base nos dados fornecidos.",
+    "trade":   "Compartilhe os resultados recentes dos trades, incluindo wins e losses com honestidade.",
     "insight": "Compartilhe um aprendizado ou insight sobre trading baseado nos dados do sistema.",
-    "news":   "Comente sobre as notícias recentes de cripto e como elas podem impactar o mercado.",
+    "news":    "Comente sobre as notícias recentes de cripto e como elas podem impactar o mercado.",
 }
+
+
+def _detect_provider(api_key: str) -> str:
+    """Detecta o provider pelo prefixo da chave."""
+    if api_key.startswith("gsk_"):
+        return "groq"
+    return "gemini"
 
 
 async def generate_post(context: dict, topic: str, api_key: str) -> str:
     """
-    Gera um post para o Instagram usando o Gemini 2.0 Flash.
-    Retorna o texto do post.
+    Gera um post para o Instagram.
+    Detecta automaticamente Gemini (AIza/AQ.) ou Groq (gsk_).
     """
-    topic_instruction = TOPIC_PROMPTS.get(topic, TOPIC_PROMPTS["market"])
+    provider = _detect_provider(api_key)
+    logger.info(f"[biel/brain] Provider detectado: {provider}")
 
+    topic_instruction = TOPIC_PROMPTS.get(topic, TOPIC_PROMPTS["market"])
     context_text = _format_context(context)
 
     prompt = f"""{topic_instruction}
@@ -58,6 +71,61 @@ CONTEXTO ATUAL DO TRADEAI:
 Gere um post para o Instagram seguindo as instruções de personalidade.
 """
 
+    if provider == "groq":
+        return await _generate_groq(api_key, prompt)
+    else:
+        return await _generate_gemini(api_key, prompt)
+
+
+async def _generate_groq(api_key: str, prompt: str) -> str:
+    """Gera texto via Groq (OpenAI-compatible API)."""
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": BIEL_SYSTEM_PROMPT.strip()},
+            {"role": "user",   "content": prompt},
+        ],
+        "temperature": 0.8,
+        "max_tokens": 400,
+        "top_p": 0.9,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                GROQ_API_URL,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            text = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+
+            if not text:
+                raise ValueError("Groq retornou resposta vazia")
+
+            logger.info(f"[biel/brain] Post gerado via Groq ({len(text)} chars)")
+            return text
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[biel/brain] Groq HTTP error {e.response.status_code}: {e.response.text}")
+        raise
+    except Exception as e:
+        logger.error(f"[biel/brain] Erro Groq: {e}")
+        raise
+
+
+async def _generate_gemini(api_key: str, prompt: str) -> str:
+    """Gera texto via Gemini 2.0 Flash."""
     payload = {
         "system_instruction": {
             "parts": [{"text": BIEL_SYSTEM_PROMPT}]
@@ -93,19 +161,19 @@ Gere um post para o Instagram seguindo as instruções de personalidade.
             if not text:
                 raise ValueError("Gemini retornou resposta vazia")
 
-            logger.info(f"[biel/brain] Post gerado ({len(text)} chars) — tópico: {topic}")
+            logger.info(f"[biel/brain] Post gerado via Gemini ({len(text)} chars)")
             return text
 
     except httpx.HTTPStatusError as e:
         logger.error(f"[biel/brain] Gemini HTTP error {e.response.status_code}: {e.response.text}")
         raise
     except Exception as e:
-        logger.error(f"[biel/brain] Erro ao gerar post: {e}")
+        logger.error(f"[biel/brain] Erro Gemini: {e}")
         raise
 
 
 def _format_context(ctx: dict) -> str:
-    """Formata o contexto em texto legível para o Gemini."""
+    """Formata o contexto em texto legível."""
     lines = []
 
     if "btc_price" in ctx:
