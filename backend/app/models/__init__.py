@@ -15,3 +15,4 @@ from app.models import strategies        # noqa: F401
 from app.models import trade_management  # noqa: F401
 
 from app.models.scalper import ScalperAccount, ScalperTrade, ScalperRiskDaily, ScalperSignal
+from app.models import biel  # noqa: F401

@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from app.api.endpoints import (
     health, market, indicators, paper_trading, market_context,
     analytics, market_structure, smart_money, optimizer, alpha,
-    robustness, strategies, trade_management, scalper,
+    robustness, strategies, trade_management, scalper, biel,
 )
 
 # Roteador raiz -- prefixo /api/v1 aplicado no main.py
@@ -59,6 +59,9 @@ router.include_router(trade_management.router, prefix="/trade-management", tags=
 
 # -- Fase 13: Scalper Engine ------------------------------------------
 router.include_router(scalper.router, prefix="/scalper", tags=["Scalper"])
+
+# -- Fase 14: Biel Instagram Agent ------------------------------------
+router.include_router(biel.router, prefix="/biel", tags=["Biel"])
 
 # -- Placeholders ----------------------------------------------------------
 # router.include_router(broker.router,   prefix="/broker",   tags=["Corretora"])

@@ -6,9 +6,11 @@ Fase 2: adiciona background tasks de sincronização de dados de mercado.
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
@@ -47,6 +49,11 @@ async def lifespan(app: FastAPI):
     from app.services.scalper.scheduler import start_scalper
     scalper_tasks = await start_scalper()
     bg_tasks.extend(scalper_tasks)
+
+    # Fase 14: Biel Instagram Agent — scheduler de posts
+    from app.services.biel.scheduler import start_biel_scheduler
+    biel_tasks = await start_biel_scheduler()
+    bg_tasks.extend(biel_tasks)
 
     logger.info("Sistema pronto para receber requisições.")
 
@@ -88,6 +95,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Static files (imagens do Biel) ────────────────────────────────────────────
+
+_BIEL_IMAGES = Path("data/biel_images")
+_BIEL_IMAGES.mkdir(parents=True, exist_ok=True)
+app.mount("/biel/images", StaticFiles(directory=str(_BIEL_IMAGES)), name="biel_images")
 
 # ── Rotas ──────────────────────────────────────────────────────────────────────
 

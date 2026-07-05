@@ -19,31 +19,32 @@ const NAV_ITEMS: NavGroup[] = [
   {
     group: null,
     items: [
-      { label: "Control Center", icon: "\u2302", href: "/", external: false },
+      { label: "Control Center", icon: "⌂", href: "/", external: false },
     ],
   },
   {
     group: "TRADING",
     items: [
-      { label: "Dashboard",     icon: "\u25c8", href: "/dashboard",        external: false },
-      { label: "Paper Trading", icon: "\u25ce", href: "/paper-trading",    external: false },
-      { label: "Trade Mgmt",   icon: "\u25c9", href: "/trade-management", external: false },
-      { label: "Scalper",      icon: "\u26a1", href: "/scalper",          external: false },
+      { label: "Dashboard",     icon: "◈", href: "/dashboard",        external: false },
+      { label: "Paper Trading", icon: "◎", href: "/paper-trading",    external: false },
+      { label: "Trade Mgmt",   icon: "◉", href: "/trade-management", external: false },
+      { label: "Scalper",      icon: "⚡", href: "/scalper",          external: false },
+      { label: "Biel Agent",   icon: "★", href: "/biel",             external: false },
     ],
   },
   {
     group: "ANALISE",
     items: [
-      { label: "Analytics",       icon: "\u25b2", href: "/analytics",  external: false },
-      { label: "Alpha Discovery", icon: "\u25c6", href: "/alpha",       external: false },
-      { label: "Robustness",      icon: "\u25c7", href: "/robustness",  external: false },
-      { label: "Strategy Lab",    icon: "\u2b21", href: "/strategies", external: false },
+      { label: "Analytics",       icon: "▲", href: "/analytics",  external: false },
+      { label: "Alpha Discovery", icon: "◆", href: "/alpha",       external: false },
+      { label: "Robustness",      icon: "◇", href: "/robustness",  external: false },
+      { label: "Strategy Lab",    icon: "⬡", href: "/strategies", external: false },
     ],
   },
   {
     group: "SISTEMA",
     items: [
-      { label: "API Docs", icon: "\u229e", href: "http://localhost:8000/docs", external: true },
+      { label: "API Docs", icon: "⊞", href: "http://localhost:8000/docs", external: true },
     ],
   },
 ];
@@ -97,7 +98,7 @@ export default function Sidebar() {
                   >
                     <span className="text-sm w-4 text-center shrink-0 opacity-60">{icon}</span>
                     <span>{label}</span>
-                    <span className="ml-auto text-[9px] text-[#2d3d5a]">externallink</span>
+                    <span className="ml-auto text-[9px] text-[#2d3d5a]">ext</span>
                   </a>
                 );
               }
@@ -126,7 +127,7 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="px-4 py-3 border-t border-[#141c2e] shrink-0">
         <div className="text-[9px] text-[#1e2e45] leading-relaxed font-mono">
-          <div>v12.0.0 - Fase 12</div>
+          <div>v14.0.0 - Fase 14</div>
           <div>Quantitative Platform</div>
         </div>
       </div>
