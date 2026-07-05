@@ -53,12 +53,12 @@ async def run_post(topic: str | None = None) -> dict:
         logger.error("[biel/engine] Nenhum token Instagram ativo.")
         return {"status": "error", "error": "Token Instagram não configurado"}
 
-    ig_account_id = token.account_id
-    if not ig_account_id or ig_account_id == "unknown":
-        # Tenta pegar da config
-        ig_account_id = config.instagram_account_id
-    if not ig_account_id:
-        return {"status": "error", "error": "Instagram Account ID não configurado"}
+    # Prioridade: config > token (config é sempre o mais recente/correto)
+    ig_account_id = config.instagram_account_id
+    if not ig_account_id or ig_account_id in ("unknown", "") or not ig_account_id.isdigit():
+        ig_account_id = token.account_id
+    if not ig_account_id or ig_account_id in ("unknown", "") or not ig_account_id.isdigit():
+        return {"status": "error", "error": f"Instagram Account ID inválido: '{ig_account_id}'. Configure um ID numérico válido."}
 
     # Determinar tópico
     if not topic:
