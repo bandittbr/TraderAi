@@ -40,7 +40,7 @@ INDICATOR_TIMEFRAMES = ["15m", "1h"]
 
 # WebSocket streams construídos dinamicamente a partir de SYMBOLS
 _WS_STREAMS = "/".join(f"{s.lower()}@miniTicker" for s in SYMBOLS)
-BINANCE_WS_URL = f"wss://stream.binance.com:9443/stream?streams={_WS_STREAMS}"
+BINANCE_WS_URL = f"wss://data-stream.binance.vision/stream?streams={_WS_STREAMS}"
 
 CANDLE_SYNC_INTERVAL_SECS    = 60
 STATS_SYNC_INTERVAL_SECS     = 30

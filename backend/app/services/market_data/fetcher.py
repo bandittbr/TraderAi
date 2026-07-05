@@ -13,7 +13,7 @@ from app.logger import get_logger
 logger = get_logger(__name__)
 
 # Base URL da Binance REST API pública
-BINANCE_BASE = "https://api.binance.com"
+BINANCE_BASE = "https://data-api.binance.vision"
 
 # Timeframes nativos da Binance
 # O timeframe "45m" NÃO existe na Binance — é calculado por resampling de 15m
