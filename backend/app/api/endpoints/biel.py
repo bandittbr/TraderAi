@@ -213,3 +213,182 @@ async def get_stats():
             "published": published.scalar(),
             "failed": failed.scalar(),
         }
+
+
+# ── Métricas completas (Influencer Dashboard) ─────────────────────────────────
+
+@router.get("/metrics")
+async def get_metrics():
+    """
+    Métricas completas do Biel para o painel Influencer.
+    Inclui: posts por período, por tópico, próximo post, agenda do dia.
+    """
+    from sqlalchemy import func, cast, Date
+    from datetime import date, timedelta
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    async with AsyncSessionLocal() as session:
+
+        # Configuração ativa
+        config_result = await session.execute(
+            select(BielConfig).where(BielConfig.is_active == True).limit(1)
+        )
+        config = config_result.scalar_one_or_none()
+
+        # Token ativo
+        token = await get_active_token()
+
+        # Totais gerais
+        total_q = await session.execute(select(func.count(BielPost.id)))
+        pub_q   = await session.execute(select(func.count(BielPost.id)).where(BielPost.status == "published"))
+        fail_q  = await session.execute(select(func.count(BielPost.id)).where(BielPost.status == "failed"))
+
+        # Posts de hoje (publicados)
+        today_q = await session.execute(
+            select(func.count(BielPost.id)).where(
+                BielPost.status == "published",
+                BielPost.published_at >= datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+            )
+        )
+
+        # Posts desta semana
+        week_q = await session.execute(
+            select(func.count(BielPost.id)).where(
+                BielPost.status == "published",
+                BielPost.published_at >= datetime(week_start.year, week_start.month, week_start.day, tzinfo=timezone.utc)
+            )
+        )
+
+        # Posts deste mês
+        month_q = await session.execute(
+            select(func.count(BielPost.id)).where(
+                BielPost.status == "published",
+                BielPost.published_at >= datetime(month_start.year, month_start.month, month_start.day, tzinfo=timezone.utc)
+            )
+        )
+
+        # Breakdown por tópico
+        topics_q = await session.execute(
+            select(BielPost.topic, func.count(BielPost.id))
+            .where(BielPost.status == "published")
+            .group_by(BielPost.topic)
+        )
+        topics = {row[0]: row[1] for row in topics_q.all()}
+
+        # Último post publicado
+        last_q = await session.execute(
+            select(BielPost)
+            .where(BielPost.status == "published")
+            .order_by(desc(BielPost.published_at))
+            .limit(1)
+        )
+        last_post = last_q.scalar_one_or_none()
+
+        # Posts por dia (últimos 7 dias)
+        daily = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            d_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+            d_end   = d_start + timedelta(days=1)
+            cnt_q = await session.execute(
+                select(func.count(BielPost.id)).where(
+                    BielPost.status == "published",
+                    BielPost.published_at >= d_start,
+                    BielPost.published_at < d_end,
+                )
+            )
+            daily.append({"date": d.isoformat(), "count": cnt_q.scalar()})
+
+        # Agenda do dia — quais slots já foram postados hoje
+        post_hours = []
+        schedule_slots = []
+        if config:
+            try:
+                post_hours = [int(h.strip()) for h in config.post_hours.split(",")]
+            except Exception:
+                post_hours = [8, 12, 18, 22]
+
+            for h in post_hours:
+                slot_start = datetime(today.year, today.month, today.day, h, 0, 0, tzinfo=timezone.utc)
+                slot_end   = slot_start + timedelta(hours=1)
+                slot_q = await session.execute(
+                    select(func.count(BielPost.id)).where(
+                        BielPost.published_at >= slot_start,
+                        BielPost.published_at < slot_end,
+                    )
+                )
+                done = slot_q.scalar() > 0
+                schedule_slots.append({
+                    "hour": h,
+                    "label": f"{h:02d}:00 UTC",
+                    "done": done,
+                    "is_next": not done and slot_start > now,
+                    "is_past": slot_start <= now and not done,
+                })
+
+        # Próximo post
+        next_post_in_minutes = None
+        next_post_label = None
+        for slot in schedule_slots:
+            if not slot["done"] and not slot["is_past"]:
+                slot_dt = datetime(today.year, today.month, today.day, slot["hour"], 0, 0, tzinfo=timezone.utc)
+                diff = int((slot_dt - now).total_seconds() / 60)
+                next_post_in_minutes = diff
+                h = slot["hour"]
+                next_post_label = f"{h:02d}:00 UTC"
+                break
+
+        # Taxa de sucesso
+        total_val = total_q.scalar() or 0
+        pub_val   = pub_q.scalar() or 0
+        success_rate = round(pub_val / total_val * 100) if total_val > 0 else 0
+
+        # Dias ativos (desde o primeiro post)
+        first_q = await session.execute(
+            select(BielPost.created_at).order_by(BielPost.created_at).limit(1)
+        )
+        first_post = first_q.scalar_one_or_none()
+        days_active = (now.date() - first_post.date()).days + 1 if first_post else 0
+
+        return {
+            "status": {
+                "configured": config is not None,
+                "active": config.is_active if config else False,
+                "token_active": token is not None and token.is_active,
+                "token_expires_at": token.expires_at.isoformat() if (token and token.expires_at) else None,
+                "token_days_left": (token.expires_at.date() - today).days if (token and token.expires_at) else None,
+                "instagram_account_id": config.instagram_account_id if config else None,
+                "posts_per_day": config.posts_per_day if config else 0,
+                "post_hours": config.post_hours if config else None,
+                "persona_name": config.persona_name if config else "Biel",
+            },
+            "counters": {
+                "total": total_val,
+                "published": pub_val,
+                "failed": fail_q.scalar(),
+                "today": today_q.scalar(),
+                "week": week_q.scalar(),
+                "month": month_q.scalar(),
+                "success_rate": success_rate,
+                "days_active": days_active,
+            },
+            "topics": topics,
+            "schedule": {
+                "slots": schedule_slots,
+                "next_post_in_minutes": next_post_in_minutes,
+                "next_post_label": next_post_label,
+            },
+            "daily": daily,
+            "last_post": {
+                "topic": last_post.topic,
+                "caption_preview": (last_post.caption[:100] + "...") if last_post and last_post.caption and len(last_post.caption) > 100 else (last_post.caption if last_post else None),
+                "instagram_id": last_post.instagram_id if last_post else None,
+                "published_at": last_post.published_at.isoformat() if last_post and last_post.published_at else None,
+                "regime": last_post.regime if last_post else None,
+                "pnl_snapshot": last_post.pnl_snapshot if last_post else None,
+            } if last_post else None,
+        }
