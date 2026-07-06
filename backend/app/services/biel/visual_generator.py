@@ -1,7 +1,9 @@
 """
-Biel — Visual Generator (v2)
-Gera imagens profissionais para Instagram usando Pillow.
-Design moderno dark-theme com gradientes, glassmorphism e tipografia limpa.
+Biel — Visual Generator (v3)
+Gera publicações profissionais 1080x1350 (4:5) para Instagram.
+4 modelos com identidade visual própria: Mercado, Trade, Insights, Notícia.
+
+Design premium inspirado em Bloomberg, TradingView, CoinMarketCap e Binance.
 """
 
 import os
@@ -9,6 +11,7 @@ import math
 import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from app.logger import get_logger
@@ -18,37 +21,79 @@ logger = get_logger(__name__)
 OUTPUT_DIR = Path("data/biel_images")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── Constantes de design ──
-W, H = 1080, 1080
+# ── Dimensões (4:5 Instagram) ──
+W, H = 1080, 1350
 
-# Paleta
-BG_TOP       = (13, 13, 26)
-BG_BOTTOM    = (26, 26, 46)
-PANEL_BG     = (20, 20, 45, 200)   # RGBA — glassmorphism
-ACCENT_BLUE  = (0, 212, 255)
-ACCENT_GREEN = (0, 255, 136)
-ACCENT_RED   = (255, 68, 68)
-ACCENT_GOLD  = (255, 215, 0)
-TEXT_WHITE   = (255, 255, 255)
-TEXT_GRAY    = (140, 140, 160)
-TEXT_DIM     = (60, 60, 80)
-GRID_LINE    = (40, 40, 60)
+# ── Paletas por tema ──
+THEMES = {
+    "market": {
+        "name": "MERCADO",
+        "primary":   (76, 222, 128),   # Verde
+        "secondary": (56, 189, 248),   # Azul
+        "accent":    (6, 182, 212),    # Ciano
+        "bg_top":    (5, 10, 20),
+        "bg_bot":    (10, 20, 40),
+        "card_bg":   (15, 25, 45, 200),
+        "glow":      (76, 222, 128, 30),
+        "hashtag":   "#MERCADOEMOVIMENTO",
+    },
+    "trade": {
+        "name": "TRADE",
+        "primary":   (56, 189, 248),   # Azul
+        "secondary": (6, 182, 212),    # Ciano
+        "accent":    (34, 211, 238),   # Sky
+        "bg_top":    (3, 7, 18),
+        "bg_bot":    (8, 18, 38),
+        "card_bg":   (12, 22, 42, 200),
+        "glow":      (56, 189, 248, 30),
+        "hashtag":   "#IDEIADETRADE",
+    },
+    "insight": {
+        "name": "INSIGHTS",
+        "primary":   (251, 191, 36),   # Dourado
+        "secondary": (253, 224, 71),   # Amarelo
+        "accent":    (245, 158, 11),   # Amber
+        "bg_top":    (12, 10, 5),
+        "bg_bot":    (24, 18, 8),
+        "card_bg":   (30, 22, 10, 200),
+        "glow":      (251, 191, 36, 30),
+        "hashtag":   "#INSIGHTTRADERAI",
+    },
+    "news": {
+        "name": "NOTÍCIA",
+        "primary":   (168, 85, 247),   # Roxo
+        "secondary": (192, 132, 252),  # Violeta
+        "accent":    (139, 92, 246),   # Indigo
+        "bg_top":    (10, 5, 18),
+        "bg_bot":    (18, 8, 30),
+        "card_bg":   (22, 10, 35, 200),
+        "glow":      (168, 85, 247, 30),
+        "hashtag":   "#NOTICIATRADERAI",
+    },
+}
 
-# ── Fontes ──
-_FONT_CACHE: dict[int, ImageFont.FreeTypeFont] = {}
+# ── Cores globais ──
+TEXT_WHITE  = (255, 255, 255)
+TEXT_GRAY   = (156, 163, 175)
+TEXT_DIM    = (75, 85, 99)
+GRID_LINE   = (30, 40, 60)
+PANEL_BORDER = (40, 50, 70)
 
-def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    """Carrega fonte com cache — fallback cross-platform."""
+
+# ═══════════════════════════════════════════════════════════════════
+#  Fontes
+# ═══════════════════════════════════════════════════════════════════
+
+_FONT_CACHE: dict = {}
+
+def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     key = (size, bold)
     if key in _FONT_CACHE:
         return _FONT_CACHE[key]
-
-    # Ordem de preferência: Segoe UI (Windows), Arial, DejaVu Sans (Linux), fallback
     candidates = (
-        ["segoeui.ttf", "segoeuib.ttf"] if bold else ["segoeui.ttf"],
-        ["arial.ttf", "arialbd.ttf"] if bold else ["arial.ttf"],
-        ["DejaVuSans.ttf", "DejaVuSans-Bold.ttf"] if bold else ["DejaVuSans.ttf"],
-        ["tahoma.ttf"], ["Verdana.ttf"],
+        ["segoeuib.ttf", "segoeui.ttf"] if bold else ["segoeui.ttf"],
+        ["arialbd.ttf", "arial.ttf"] if bold else ["arial.ttf"],
+        ["DejaVuSans-Bold.ttf", "DejaVuSans.ttf"] if bold else ["DejaVuSans.ttf"],
     )
     for group in candidates:
         for name in group:
@@ -58,7 +103,6 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
                 return f
             except (IOError, OSError):
                 continue
-    # Fallback: default PIL
     f = ImageFont.load_default()
     _FONT_CACHE[key] = f
     return f
@@ -68,69 +112,49 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
 #  Utilitários de desenho
 # ═══════════════════════════════════════════════════════════════════
 
-def _draw_gradient(draw: ImageDraw, x1, y1, x2, y2, color1, color2, vertical=True):
-    """Desenha gradiente linear."""
-    steps = 120
+def _draw_gradient(draw, x1, y1, x2, y2, c1, c2):
+    steps = 150
     for i in range(steps):
         t = i / steps
-        color = tuple(int(c1 + (c2 - c1) * t) for c1, c2 in zip(color1[:3], color2[:3]))
-        if vertical:
-            draw.rectangle([x1, y1 + (y2 - y1) * t / steps * steps, x2, y1 + (y2 - y1) * (t + 1) / steps * steps], fill=color)
-        else:
-            draw.rectangle([x1 + (x2 - x1) * t / steps * steps, y1, x1 + (x2 - x1) * (t + 1) / steps * steps, y2], fill=color)
+        r = int(c1[0] + (c2[0] - c1[0]) * t)
+        g = int(c1[1] + (c2[1] - c1[1]) * t)
+        b = int(c1[2] + (c2[2] - c1[2]) * t)
+        yy = y1 + (y2 - y1) * i // steps
+        yy2 = y1 + (y2 - y1) * (i + 1) // steps
+        draw.rectangle([x1, yy, x2, yy2], fill=(r, g, b))
 
 
-def _rounded_rect(draw: ImageDraw, xy, radius, fill=None, outline=None, outline_width=2):
-    """Desenha retângulo com cantos arredondados."""
+def _rounded_rect(draw, xy, radius, fill=None, outline=None, ow=2):
     x1, y1, x2, y2 = xy
     r = min(radius, (x2 - x1) // 2, (y2 - y1) // 2)
-    # Helper cantos
-    def _corners(fill_c):
-        draw.pieslice([x1, y1, x1 + r * 2, y1 + r * 2], 180, 270, fill=fill_c)
-        draw.pieslice([x2 - r * 2, y1, x2, y1 + r * 2], 270, 360, fill=fill_c)
-        draw.pieslice([x1, y2 - r * 2, x1 + r * 2, y2], 90, 180, fill=fill_c)
-        draw.pieslice([x2 - r * 2, y2 - r * 2, x2, y2], 0, 90, fill=fill_c)
-        draw.rectangle([x1 + r, y1, x2 - r, y2], fill=fill_c)
-        draw.rectangle([x1, y1 + r, x2, y2 - r], fill=fill_c)
-
+    def _draw(f):
+        draw.pieslice([x1, y1, x1 + r*2, y1 + r*2], 180, 270, fill=f)
+        draw.pieslice([x2 - r*2, y1, x2, y1 + r*2], 270, 360, fill=f)
+        draw.pieslice([x1, y2 - r*2, x1 + r*2, y2], 90, 180, fill=f)
+        draw.pieslice([x2 - r*2, y2 - r*2, x2, y2], 0, 90, fill=f)
+        draw.rectangle([x1 + r, y1, x2 - r, y2], fill=f)
+        draw.rectangle([x1, y1 + r, x2, y2 - r], fill=f)
     if fill:
-        _corners(fill)
+        _draw(fill)
     if outline:
-        # desenha um fill outline sutil por cima
-        _corners(outline + (60,))
+        _draw(outline)
 
 
-def _draw_gloss(draw: ImageDraw, xy):
-    """Overlay de brilho sutil no topo do card."""
+def _gloss(draw, xy):
     x1, y1, x2, y2 = xy
-    for i in range(20):
-        t = 1 - i / 20
-        alpha = int(15 * t)
+    for i in range(15):
+        alpha = int(12 * (1 - i / 15))
         draw.rectangle([x1, y1 + i, x2, y1 + i + 1], fill=(255, 255, 255, alpha))
 
 
-def _draw_gauge(draw: ImageDraw, cx: int, cy: int, radius: int, value: int, label: str, color):
-    """Desenha medidor semicircular (Fear & Greed style)."""
-    # Arco de fundo (180 graus)
-    bbox = [cx - radius, cy - radius, cx + radius, cy + radius]
-    # Fundo do arco
-    draw.pieslice(bbox, 180, 0, fill=(40, 40, 60), outline=(50, 50, 70), width=4)
-
-    # Arco preenchido
-    angle = 180 * value / 100
-    draw.pieslice(bbox, 180, 180 - angle, fill=color, outline=color, width=6)
-
-    # Valor central
-    font_val = _get_font(38, bold=True)
-    font_label = _get_font(14)
-    # Sombra
-    draw.text((cx + 2, cy - 15 + 2), str(value), font=font_val, fill=(0, 0, 0, 100), anchor="mm")
-    draw.text((cx, cy - 15), str(value), font=font_val, fill=TEXT_WHITE, anchor="mm")
-    draw.text((cx, cy + 15), label, font=font_label, fill=TEXT_GRAY, anchor="mm")
+def _grid_bg(draw):
+    for x in range(0, W, 90):
+        draw.line([(x, 0), (x, H)], fill=GRID_LINE + (20,), width=1)
+    for y in range(0, H, 90):
+        draw.line([(0, y), (W, y)], fill=GRID_LINE + (20,), width=1)
 
 
-def _draw_sparkline(draw: ImageDraw, xy, values, color):
-    """Desenha mini gráfico de linha (sparkline)."""
+def _sparkline(draw, xy, values, color):
     x1, y1, x2, y2 = xy
     if not values or len(values) < 2:
         return
@@ -138,265 +162,490 @@ def _draw_sparkline(draw: ImageDraw, xy, values, color):
     if vmax == vmin:
         vmax = vmin + 1
     n = len(values)
-    points = []
+    pts = []
     for i, v in enumerate(values):
         px = x1 + (x2 - x1) * i / (n - 1)
         py = y2 - (y2 - y1) * (v - vmin) / (vmax - vmin)
-        points.append((px, py))
+        pts.append((px, py))
+    for i in range(len(pts) - 1):
+        draw.line([pts[i], pts[i + 1]], fill=color, width=3)
+    # Glow
+    for i in range(len(pts) - 1):
+        draw.line([pts[i], pts[i + 1]], fill=color + (60,), width=7)
+        break
+    # Dot at end
+    draw.ellipse([pts[-1][0] - 5, pts[-1][1] - 5, pts[-1][0] + 5, pts[-1][1] + 5], fill=color)
 
-    # Sombra
-    for i, (px, py) in enumerate(points):
-        draw.ellipse([px - 3, py - 3, px + 3, py + 3], fill=color)
-    # Linhas
-    for i in range(len(points) - 1):
-        draw.line([points[i], points[i + 1]], fill=color, width=3)
 
-    # Gradiente do fill
-    if len(points) > 1:
-        poly = [(x1, y2)] + points + [(x2, y2)]
-        for i in range(len(poly) - 1):
-            alpha = int(40 * (1 - i / len(poly)))
-            draw.line([poly[i], poly[i + 1]], fill=color + (alpha,), width=6)
+def _metric_card(draw, cx, y, label, value, color, width=220, height=90):
+    x1 = cx - width // 2
+    x2 = cx + width // 2
+    _rounded_rect(draw, (x1, y, x2, y + height), 14, fill=(15, 25, 45, 180))
+    draw.text((cx, y + 22), label, font=_font(11), fill=TEXT_GRAY, anchor="mm")
+    draw.text((cx, y + 60), value, font=_font(18, bold=True), fill=color, anchor="mm")
+
+
+def _conviction_bar(draw, x, y, w, h, pct, color):
+    # Background
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=h // 2, fill=(30, 40, 60))
+    # Fill
+    if pct > 0:
+        fw = max(int(w * pct / 100), 4)
+        draw.rounded_rectangle([x, y, x + fw, y + h], radius=h // 2, fill=color)
+
+
+def _logo_header(draw, theme):
+    """Desenha logo Trader AI + tema no topo."""
+    p = THEMES[theme]
+    # Logo
+    draw.text((40, 35), "TRADER", font=_font(22, bold=True), fill=TEXT_WHITE)
+    draw.text((40, 63), "AI", font=_font(22, bold=True), fill=p["primary"])
+    # Linha decorativa
+    draw.line([(40, 90), (200, 90)], fill=p["primary"], width=2)
+    # Tema tag à direita
+    tag = p["name"]
+    tw = len(tag) * 10
+    _rounded_rect(draw, (W - 40 - tw - 24, 35, W - 40, 65), 10, fill=p["card_bg"], outline=p["primary"] + (60,))
+    draw.text((W - 40 - 12 - tw // 2, 50), tag, font=_font(12, bold=True), fill=p["primary"], anchor="mm")
+
+
+def _footer(draw, theme):
+    p = THEMES[theme]
+    draw.line([(40, H - 80), (W - 40, H - 80)], fill=GRID_LINE + (40,), width=1)
+    draw.text((40, H - 60), "TradeAI", font=_font(11, bold=True), fill=p["primary"])
+    draw.text((40, H - 40), "tradeai.vercel.app", font=_font(9), fill=TEXT_DIM)
+    draw.text((W - 40, H - 50), p["hashtag"], font=_font(10, bold=True), fill=TEXT_DIM + (80,), anchor="rm")
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  Geradores de imagem
+#  1. MODELO MERCADO
 # ═══════════════════════════════════════════════════════════════════
 
-def _generate_base_image(topic_label: str, emoji: str) -> tuple[Image.Image, ImageDraw.Draw]:
-    """Cria imagem base com gradiente de fundo e header."""
+def generate_market_image(ctx: dict) -> str:
+    """
+    Publicação MERCADO — 1080x1350
+    Dashboard premium: gráfico de linha, BTC price, cards inferiores.
+    """
     img = Image.new("RGBA", (W, H))
     draw = ImageDraw.Draw(img)
-    _draw_gradient(draw, 0, 0, W, H, BG_TOP, BG_BOTTOM)
+    p = THEMES["market"]
 
-    # Grid decorativo sutil
-    for x in range(0, W, 80):
-        draw.line([(x, 0), (x, H)], fill=GRID_LINE + (30,), width=1)
-    for y in range(0, H, 80):
-        draw.line([(0, y), (W, y)], fill=GRID_LINE + (30,), width=1)
+    _draw_gradient(draw, 0, 0, W, H, p["bg_top"], p["bg_bot"])
+    _grid_bg(draw)
 
-    # Header
-    font_title = _get_font(36, bold=True)
-    font_sub = _get_font(14)
-    # Glow no título
-    for dx, dy in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
-        draw.text((W // 2 + dx, 48 + dy), f"{emoji}  BIEL TRADER", font=font_title, fill=(0, 0, 0, 80), anchor="mm")
-    draw.text((W // 2, 48), f"{emoji}  BIEL TRADER", font=font_title, fill=ACCENT_GOLD, anchor="mm")
+    # ── Logo + Header ──
+    _logo_header(draw, "market")
 
-    timestamp = datetime.now(timezone.utc).strftime("%d %b %Y • %H:%M UTC")
-    draw.text((W // 2, 90), timestamp, font=font_sub, fill=TEXT_GRAY, anchor="mm")
+    # ── Título principal ──
+    draw.text((40, 125), "Mercado em Movimento", font=_font(38, bold=True), fill=TEXT_WHITE)
+    draw.text((40, 170), "Análise geral do mercado em tempo real • "
+              + datetime.now(timezone.utc).strftime("%d %b %Y %H:%M UTC"),
+              font=_font(13), fill=TEXT_GRAY)
 
-    # Tag
-    font_tag = _get_font(12, bold=True)
-    draw.text((W // 2, 118), f"#{topic_label.upper().replace(' ', '')}", font=font_tag, fill=TEXT_DIM, anchor="mm")
+    # ── Gráfico de linha principal ──
+    chart_x1, chart_y1, chart_x2, chart_y2 = 40, 220, 1040, 520
+    _rounded_rect(draw, (chart_x1, chart_y1, chart_x2, chart_y2), 18, fill=p["card_bg"], outline=PANEL_BORDER + (40,))
+    _gloss(draw, (chart_x1, chart_y1, chart_x2, chart_y1 + 15))
 
-    return img, draw
+    # Título do gráfico
+    draw.text((chart_x1 + 20, chart_y1 + 15), "BTC/USDT • Preço", font=_font(12), fill=TEXT_GRAY)
+    draw.text((chart_x1 + 20, chart_y1 + 38), f"${ctx.get('btc_price', 0):,.0f}",
+              font=_font(36, bold=True), fill=p["primary"])
+
+    # Variação 24h
+    change = ctx.get("btc_change_24h")
+    if change is not None:
+        c_color = p["primary"] if change >= 0 else (255, 68, 68)
+        sign = "+" if change >= 0 else ""
+        draw.text((chart_x1 + 280, chart_y1 + 38), f"{sign}{change:.2f}%",
+                  font=_font(18, bold=True), fill=c_color)
+
+    # Sparkline no gráfico
+    prices = ctx.get("btc_price_history", [])
+    if prices and len(prices) >= 2:
+        _sparkline(draw, (chart_x1 + 40, chart_y1 + 80, chart_x2 - 40, chart_y2 - 30), prices, p["primary"])
+        # Labels de eixo
+        draw.text((chart_x1 + 40, chart_y2 - 15), f"${min(prices):,.0f}", font=_font(9), fill=TEXT_DIM)
+        draw.text((chart_x2 - 40, chart_y2 - 15), f"${max(prices):,.0f}", font=_font(9), fill=TEXT_DIM)
+    else:
+        # Placeholder
+        draw.text(((chart_x1 + chart_x2) // 2, (chart_y1 + chart_y2) // 2),
+                  "Aguardando dados de preço...", font=_font(14), fill=TEXT_DIM, anchor="mm")
+
+    # ── Cards inferiores (2 linhas de 2) ──
+    cards = [
+        ("DOMÍNIO BTC", ctx.get("resumo", {}).get("btc_dominance", "58.2%")),
+        ("VOLUME 24H", ctx.get("resumo", {}).get("volume_24h", "$28.4B")),
+        ("FEAR & GREED", f"{ctx.get('fear_greed_value', 50)} — {ctx.get('fear_greed_label', 'Neutral')}"),
+        ("REGIME", ctx.get("regime", "NEUTRAL")),
+    ]
+    card_w, card_h = 470, 95
+    gap = 30
+    start_y = 560
+    for i, (label, value) in enumerate(cards):
+        col = i % 2
+        row = i // 2
+        cx = 40 + col * (card_w + gap) + card_w // 2
+        cy = start_y + row * (card_h + gap)
+
+        # Card color
+        c_color = p["primary"]
+        if label == "FEAR & GREED":
+            fg = ctx.get("fear_greed_value", 50)
+            c_color = (255, 68, 68) if fg < 25 else (251, 191, 36) if fg < 50 else p["secondary"]
+        elif label == "REGIME":
+            reg = ctx.get("regime", "")
+            c_color = p["primary"] if "BULL" in str(reg).upper() else (255, 68, 68) if "BEAR" in str(reg).upper() else (251, 191, 36)
+        elif label == "VOLUME 24H":
+            c_color = p["secondary"]
+
+        _rounded_rect(draw, (cx - card_w // 2, cy, cx + card_w // 2, cy + card_h),
+                      14, fill=p["card_bg"])
+        draw.text((cx, cy + 22), label, font=_font(11), fill=TEXT_GRAY, anchor="mm")
+        draw.text((cx, cy + 62), value, font=_font(20, bold=True), fill=c_color, anchor="mm")
+
+    # ── P&L Snapshot ──
+    pnl = ctx.get("pnl_total", 0)
+    pnl_pct = ctx.get("pnl_pct", 0)
+    sign = "+" if pnl >= 0 else ""
+    pnl_color = p["primary"] if pnl >= 0 else (255, 68, 68)
+    draw.text((40, 790), f"P&L Acumulado: {sign}${pnl:,.2f} ({sign}{pnl_pct:.1f}%)",
+              font=_font(14, bold=True), fill=pnl_color)
+
+    # ── Footer ──
+    _footer(draw, "market")
+
+    return _save(img, "market")
 
 
-def _finalize(img: Image.Image, topic: str) -> str:
-    """Salva imagem final e retorna caminho."""
-    # Converte para RGB e adiciona footer
+# ═══════════════════════════════════════════════════════════════════
+#  2. MODELO TRADE
+# ═══════════════════════════════════════════════════════════════════
+
+def generate_trade_image(ctx: dict) -> str:
+    """
+    Publicação TRADE — 1080x1350
+    Setup de trade com entradas, stops, alvos e convicção.
+    """
+    img = Image.new("RGBA", (W, H))
     draw = ImageDraw.Draw(img)
-    font_footer = _get_font(11)
-    draw.text((W // 2, H - 30), "TradeAI • Dados em tempo real • Não é recomendação de investimento",
-              font=font_footer, fill=TEXT_DIM, anchor="mm")
+    p = THEMES["trade"]
 
+    _draw_gradient(draw, 0, 0, W, H, p["bg_top"], p["bg_bot"])
+    _grid_bg(draw)
+
+    # ── Logo + Header ──
+    _logo_header(draw, "trade")
+
+    draw.text((40, 125), "Ideia de Trade", font=_font(38, bold=True), fill=TEXT_WHITE)
+    draw.text((40, 170), "Setup técnico analisado pela IA • "
+              + datetime.now(timezone.utc).strftime("%d %b %Y"),
+              font=_font(13), fill=TEXT_GRAY)
+
+    # ── Mini gráfico de candles (decorativo) ──
+    _rounded_rect(draw, (40, 210, 1040, 360), 16, fill=p["card_bg"], outline=PANEL_BORDER + (40,))
+    _gloss(draw, (40, 210, 1040, 225))
+
+    # Candle stick chart decorativo
+    candle_data = ctx.get("candle_history", [])
+    if candle_data and len(candle_data) >= 3:
+        for i, c in enumerate(candle_data[-20:]):
+            open_p, high, low, close = c["open"], c["high"], c["low"], c["close"]
+            is_green = close >= open_p
+            c_color = p["primary"] if is_green else (255, 68, 68)
+            x = 80 + i * 48
+            # Wick
+            draw.line([(x, int(240 + (5000 - high) / 10)), (x, int(240 + (5000 - low) / 10))],
+                      fill=c_color, width=2)
+            # Body
+            top = min(open_p, close)
+            bot = max(open_p, close)
+            yt = int(240 + (5000 - top) / 10)
+            yb = int(240 + (5000 - bot) / 10)
+            draw.rectangle([x - 6, min(yt, yb), x + 6, max(yt, yb)], fill=c_color)
+    else:
+        # Candles simulados
+        import random
+        random.seed(42)
+        price = 65000
+        for i in range(20):
+            change = random.uniform(-500, 500)
+            o = price
+            c = price + change
+            h = max(o, c) + random.uniform(0, 200)
+            l = min(o, c) - random.uniform(0, 200)
+            is_g = c >= o
+            cc = p["primary"] if is_g else (255, 68, 68)
+            x = 80 + i * 48
+            draw.line([(x, int(240 + (5000 - h) / 10)), (x, int(240 + (5000 - l) / 10))], fill=cc, width=2)
+            t, b = min(o, c), max(o, c)
+            yt = int(240 + (5000 - t) / 10)
+            yb = int(240 + (5000 - b) / 10)
+            draw.rectangle([x - 6, min(yt, yb), x + 6, max(yt, yb)], fill=cc)
+            price = c
+
+    # ── Card principal: Dados do Trade ──
+    trades = ctx.get("ultimos_trades", [])
+    trade = trades[0] if trades else {}
+
+    symbol = trade.get("symbol", "BTC/USDT")
+    side = trade.get("side", "LONG").upper()
+    entry = trade.get("entry_price", ctx.get("btc_price", 65000))
+    tp1 = trade.get("tp1", entry * 1.02)
+    tp2 = trade.get("tp2", entry * 1.04)
+    sl = trade.get("sl", entry * 0.98)
+    conviction = trade.get("conviction", 78)
+
+    # Esquerda: Info do par
+    _rounded_rect(draw, (40, 400, 520, 620), 16, fill=p["card_bg"])
+    _gloss(draw, (40, 400, 520, 415))
+
+    draw.text((280, 430), symbol, font=_font(28, bold=True), fill=TEXT_WHITE, anchor="mm")
+
+    # Badge LONG/SHORT
+    side_color = p["primary"] if side == "LONG" else (255, 68, 68)
+    _rounded_rect(draw, (280 - 50, 458, 280 + 50, 482), 8, fill=side_color + (40,), outline=side_color + (80,))
+    draw.text((280, 470), side, font=_font(14, bold=True), fill=side_color, anchor="mm")
+
+    # Entrada
+    draw.text((280, 510), "Entrada", font=_font(11), fill=TEXT_GRAY, anchor="mm")
+    draw.text((280, 540), f"${entry:,.0f}", font=_font(26, bold=True), fill=p["secondary"], anchor="mm")
+
+    # Risco/Retorno
+    risk = abs(entry - sl)
+    reward = abs(tp1 - entry)
+    rr = reward / risk if risk > 0 else 0
+    draw.text((280, 580), f"Risco:Retorno 1:{rr:.1f}", font=_font(14, bold=True), fill=TEXT_GRAY, anchor="mm")
+
+    # Direita: Alvos e Stop
+    _rounded_rect(draw, (560, 400, 1040, 620), 16, fill=p["card_bg"])
+    _gloss(draw, (560, 400, 1040, 415))
+
+    targets = [("TP 1", tp1, p["primary"]), ("TP 2", tp2, p["secondary"]), ("STOP", sl, (255, 68, 68))]
+    for i, (label, price_t, color) in enumerate(targets):
+        y = 440 + i * 65
+        draw.text((640, y), label, font=_font(12), fill=TEXT_GRAY, anchor="mm")
+        draw.text((640, y + 25), f"${price_t:,.0f}", font=_font(18, bold=True), fill=color, anchor="mm")
+        if i < 2:
+            draw.line([(560, y + 45), (1040, y + 45)], fill=GRID_LINE + (40,), width=1)
+
+    # ── Barra de Convicção ──
+    _rounded_rect(draw, (40, 660, 1040, 720), 14, fill=p["card_bg"])
+    draw.text((60, 690), f"Convicção da Operação: {conviction}%", font=_font(14, bold=True), fill=TEXT_WHITE, anchor="lm")
+    _conviction_bar(draw, 350, 685, 500, 14, conviction, p["primary"])
+
+    # ── Últimos resultados ──
+    _rounded_rect(draw, (40, 760, 1040, 920), 16, fill=p["card_bg"])
+    _gloss(draw, (40, 760, 1040, 775))
+    draw.text((60, 790), "Últimos Trades", font=_font(14, bold=True), fill=p["secondary"])
+
+    y = 830
+    for t in trades[:4]:
+        t_color = p["primary"] if t.get("pnl", 0) >= 0 else (255, 68, 68)
+        em = "✅" if t.get("pnl", 0) >= 0 else "❌"
+        s = "+" if t.get("pnl", 0) >= 0 else ""
+        draw.text((80, y), f"{em} {t.get('symbol', '???')} {t.get('side', '').upper()[:4]}  {s}${t.get('pnl', 0):,.2f}",
+                  font=_font(14, bold=True), fill=t_color, anchor="lm")
+        y += 40
+
+    # ── Win Rate ──
+    wr = ctx.get("win_rate_recente", 0)
+    wr_color = p["primary"] if wr >= 50 else (251, 191, 36) if wr >= 30 else (255, 68, 68)
+    draw.text((600, 830), f"Win Rate: {wr}%", font=_font(18, bold=True), fill=wr_color, anchor="mm")
+
+    wins = sum(1 for t in trades if t.get("pnl", 0) >= 0)
+    total = len(trades)
+    if total > 0:
+        losses = total - wins
+        _conviction_bar(draw, 600, 870, 350, 12, wins / total * 100 if total else 0, p["primary"])
+        draw.text((600, 895), f"{wins}W / {losses}L", font=_font(11), fill=TEXT_GRAY, anchor="mm")
+
+    # ── Footer ──
+    _footer(draw, "trade")
+
+    return _save(img, "trade")
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  3. MODELO INSIGHTS
+# ═══════════════════════════════════════════════════════════════════
+
+def generate_insight_image(ctx: dict) -> str:
+    """
+    Publicação INSIGHTS — 1080x1350
+    Inteligência de mercado com 3 insights principais.
+    """
+    img = Image.new("RGBA", (W, H))
+    draw = ImageDraw.Draw(img)
+    p = THEMES["insight"]
+
+    _draw_gradient(draw, 0, 0, W, H, p["bg_top"], p["bg_bot"])
+    _grid_bg(draw)
+
+    # ── Logo + Header ──
+    _logo_header(draw, "insight")
+
+    draw.text((40, 125), "Insight AI", font=_font(38, bold=True), fill=TEXT_WHITE)
+    draw.text((40, 170), "Inteligência de mercado • Análise institucional • "
+              + datetime.now(timezone.utc).strftime("%d %b %Y"),
+              font=_font(13), fill=TEXT_GRAY)
+
+    # ── Pergunta principal ──
+    question = ctx.get("question", "O que a IA está enxergando no mercado?")
+    _rounded_rect(draw, (40, 210, 1040, 300), 16, fill=p["card_bg"], outline=p["primary"] + (40,))
+    draw.text((540, 235), "⚡", font=_font(28), fill=p["primary"], anchor="mm")
+    draw.text((540, 280), question, font=_font(20, bold=True), fill=p["primary"], anchor="mm")
+
+    # ── 3 Insights ──
+    insights = ctx.get("insights", [
+        {"icon": "📊", "title": "Acumulação em Large Caps",
+         "desc": "Baleias estão acumulando BTC e ETH em carteiras frias. Fluxo de exchange em baixa."},
+        {"icon": "💧", "title": "Liquidez Concentrada",
+         "desc": "Liquidez está migrando para DEXs. CEXs perdem dominância — sinal de maturidade do mercado."},
+        {"icon": "📈", "title": "Tendência de Alta",
+         "desc": "Estrutura de mercado favorece alta no curto prazo. Suporte em $62k e resistência em $72k."},
+    ])
+
+    insight_y = 340
+    for i, ins in enumerate(insights):
+        y = insight_y + i * 220
+        _rounded_rect(draw, (40, y, 1040, y + 190), 16, fill=p["card_bg"])
+        if i == 0:
+            _gloss(draw, (40, y, 1040, y + 15))
+
+        # Ícone grande
+        draw.text((100, y + 50), ins["icon"], font=_font(36), anchor="mm")
+        # Título
+        draw.text((160, y + 30), ins["title"], font=_font(18, bold=True), fill=TEXT_WHITE, anchor="lm")
+        # Descrição
+        draw.text((160, y + 60), ins["desc"], font=_font(13), fill=TEXT_GRAY, anchor="lm")
+        # Linha decorativa
+        draw.line([(160, y + 135), (1000, y + 135)], fill=p["primary"] + (40,), width=1)
+
+        # Tag inferior
+        tags = ["Acumulação", "Liquidez", "Tendência"]
+        _rounded_rect(draw, (160, y + 145, 160 + len(tags[i]) * 10 + 24, y + 170),
+                      8, fill=p["primary"] + (30,))
+        draw.text((160 + len(tags[i]) * 5 + 12, y + 157), tags[i], font=_font(9, bold=True), fill=p["primary"], anchor="mm")
+
+    # ── Resumo da IA ──
+    _rounded_rect(draw, (40, 980, 1040, 1080), 16, fill=p["card_bg"], outline=p["primary"] + (40,))
+    _gloss(draw, (40, 980, 1040, 995))
+    draw.text((540, 1010), "🤖 Resumo da IA", font=_font(14, bold=True), fill=p["primary"], anchor="mm")
+    ai_summary = ctx.get("ai_summary",
+                         "Mercado apresenta sinais mistos. Acumulação institucional contrasta com "
+                         "baixa liquidez de varejo. Cenário de médio prazo segue construtivo.")
+    draw.text((540, 1050), ai_summary, font=_font(13), fill=TEXT_GRAY, anchor="mm")
+
+    # ── Footer ──
+    _footer(draw, "insight")
+
+    return _save(img, "insight")
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  4. MODELO NOTÍCIA
+# ═══════════════════════════════════════════════════════════════════
+
+def generate_news_image(ctx: dict) -> str:
+    """
+    Publicação NOTÍCIA — 1080x1350
+    Capa de notícia financeira premium com headline, impacto e fonte.
+    """
+    img = Image.new("RGBA", (W, H))
+    draw = ImageDraw.Draw(img)
+    p = THEMES["news"]
+
+    _draw_gradient(draw, 0, 0, W, H, p["bg_top"], p["bg_bot"])
+    _grid_bg(draw)
+
+    # ── Logo + Header ──
+    _logo_header(draw, "news")
+
+    # ── Tag NOTÍCIA ──
+    _rounded_rect(draw, (40, 115, 40 + 100, 145), 10, fill=p["primary"] + (60,), outline=p["primary"] + (80,))
+    draw.text((90, 130), "NOTÍCIA", font=_font(12, bold=True), fill=p["primary"], anchor="mm")
+
+    draw.text((160, 130), datetime.now(timezone.utc).strftime("%d %b %Y"),
+              font=_font(13), fill=TEXT_GRAY, anchor="lm")
+
+    # ── Headline grande ──
+    headline = ctx.get("headline", "ETF de Ethereum à Vista: "
+                        "SEC Aprova os Primeiros Fundos Spot de ETH nos EUA")
+    draw.text((40, 180), headline, font=_font(32, bold=True), fill=TEXT_WHITE)
+
+    # ── Imagem/Ilustração (placeholder com gradiente + símbolo) ──
+    img_x1, img_y1, img_x2, img_y2 = 40, 280, 1040, 520
+    _rounded_rect(draw, (img_x1, img_y1, img_x2, img_y2), 18, fill=(20, 10, 35))
+    _draw_gradient(draw, img_x1, img_y1, img_x2, img_y2, (30, 15, 50), (15, 5, 25))
+
+    # Ilustração central
+    symbol = ctx.get("news_symbol", "ETH")
+    icons = {"BTC": "₿", "ETH": "⟠", "SOL": "◎", "DEFAULT": "◈"}
+    icon_text = icons.get(symbol.upper(), icons["DEFAULT"])
+
+    # Glow do ícone
+    for r in range(40, 0, -5):
+        alpha = int(15 * (1 - r / 40))
+        draw.ellipse([540 - r, 400 - r, 540 + r, 400 + r], fill=p["primary"] + (alpha,))
+
+    draw.text((540, 380), icon_text, font=_font(60), fill=p["primary"], anchor="mm")
+    draw.text((540, 450), symbol.upper(), font=_font(28, bold=True), fill=TEXT_WHITE, anchor="mm")
+
+    # Grid decorativo na imagem
+    for x in range(img_x1, img_x2, 60):
+        draw.line([(x, img_y1), (x, img_y2)], fill=(255, 255, 255, 8), width=1)
+    for y in range(img_y1, img_y2, 60):
+        draw.line([(img_x1, y), (img_x2, y)], fill=(255, 255, 255, 8), width=1)
+
+    # ── Resumo da notícia ──
+    summary = ctx.get("summary",
+                      "A SEC aprovou os primeiros ETFs spot de Ethereum nos Estados Unidos, "
+                      "marcando um marco histórico para o mercado cripto. Os fundos começam "
+                      "a ser negociados esta semana.")
+    _rounded_rect(draw, (40, 560, 1040, 660), 16, fill=p["card_bg"])
+    draw.text((60, 590), "📰", font=_font(20), anchor="lm")
+    draw.text((100, 590), summary, font=_font(14), fill=TEXT_GRAY, anchor="lm")
+
+    # ── Box: Impacto no Mercado ──
+    _rounded_rect(draw, (40, 700, 1040, 830), 16, fill=p["card_bg"], outline=p["primary"] + (40,))
+    _gloss(draw, (40, 700, 1040, 715))
+    draw.text((540, 725), "📊 Impacto no Mercado", font=_font(16, bold=True), fill=p["primary"], anchor="mm")
+
+    impacts_raw = ctx.get("impacts", [
+        ("Preço ETH", "+8.5%"),
+        ("Preço BTC", "+2.1%"),
+        ("Volume DEX", "+$420M"),
+    ])
+    impacts = [ (item[0], item[1], item[2] if len(item) > 2 else p["primary"]) for item in impacts_raw ]
+    for i, (label, value, color) in enumerate(impacts):
+        cx = 250 + i * 320
+        draw.text((cx, 765), label, font=_font(12), fill=TEXT_GRAY, anchor="mm")
+        draw.text((cx, 800), value, font=_font(22, bold=True), fill=color, anchor="mm")
+
+    # ── Fonte ──
+    source = ctx.get("source", "CoinDesk • Reuters • Bloomberg")
+    draw.text((40, 880), f"Fonte: {source}", font=_font(12), fill=TEXT_DIM, anchor="lm")
+
+    # ── Footer ──
+    _footer(draw, "news")
+
+    return _save(img, "news")
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Salvar
+# ═══════════════════════════════════════════════════════════════════
+
+def _save(img: Image.Image, topic: str) -> str:
+    """Converte para RGB e salva como PNG."""
     rgb = Image.new("RGB", (W, H), (0, 0, 0))
     rgb.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
-
     filename = f"{topic}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.png"
     filepath = OUTPUT_DIR / filename
     rgb.save(filepath, quality=95)
-    logger.info(f"[biel/visual] Imagem salva: {filepath}")
+    logger.info(f"[biel/visual] Publicação salva: {filepath}")
     return str(filepath)
-
-
-# ─── MARKET IMAGE ───────────────────────────────────────────────────
-
-def generate_market_image(context: dict) -> str:
-    """
-    Gera imagem de mercado com visual profissional:
-    - BTC price com sparkline
-    - Fear & Greed gauge
-    - Regime indicator
-    - P&L
-    """
-    img, draw = _generate_base_image("Mercado", "📊")
-
-    btc_price = context.get("btc_price", 0)
-    regime = context.get("regime", "NEUTRAL")
-    fg_value = context.get("fear_greed_value", 50)
-    fg_label = context.get("fear_greed_label", "Neutral")
-    pnl = context.get("pnl_total", 0)
-    pnl_pct = context.get("pnl_pct", 0)
-    regime_color = ACCENT_GREEN if "BULL" in str(regime).upper() else (ACCENT_RED if "BEAR" in str(regime).upper() else ACCENT_GOLD)
-
-    # ── Card: BTC Price ──
-    cx, cy = 540, 300
-    _rounded_rect(draw, (60, 180, 1020, 420), 24, fill=PANEL_BG)
-    _draw_gloss(draw, (60, 180, 1020, 195))
-
-    draw.text((540, 220), "BTC/USDT", font=_get_font(14), fill=TEXT_GRAY, anchor="mm")
-    # Preço grande
-    font_price = _get_font(56, bold=True)
-    price_text = f"${btc_price:,.0f}"
-    for dx, dy in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
-        draw.text((540 + dx, 310 + dy), price_text, font=font_price, fill=(0, 0, 0, 80), anchor="mm")
-    draw.text((540, 310), price_text, font=font_price, fill=ACCENT_BLUE, anchor="mm")
-
-    # Variação percentual (mockada - idealmente viria do context)
-    change_24h = context.get("btc_change_24h", None)
-    if change_24h is not None:
-        change_color = ACCENT_GREEN if change_24h >= 0 else ACCENT_RED
-        sign = "+" if change_24h >= 0 else ""
-        draw.text((540, 360), f"24h: {sign}{change_24h:.2f}%", font=_get_font(14, bold=True), fill=change_color, anchor="mm")
-
-    # ── Card inferior esquerdo: Regime + P&L ──
-    _rounded_rect(draw, (60, 460, 520, 640), 24, fill=PANEL_BG)
-    _draw_gloss(draw, (60, 460, 520, 475))
-
-    draw.text((290, 500), "REGIME", font=_get_font(12), fill=TEXT_GRAY, anchor="mm")
-    font_regime = _get_font(40, bold=True)
-    draw.text((290, 560), regime, font=font_regime, fill=regime_color, anchor="mm")
-
-    pnl_color = ACCENT_GREEN if pnl >= 0 else ACCENT_RED
-    sign = "+" if pnl >= 0 else ""
-    draw.text((290, 620), f"P&L: {sign}${pnl:,.2f} ({sign}{pnl_pct:.1f}%)",
-              font=_get_font(16, bold=True), fill=pnl_color, anchor="mm")
-
-    # ── Card inferior direito: Fear & Greed ──
-    _rounded_rect(draw, (560, 460, 1020, 640), 24, fill=PANEL_BG)
-    _draw_gloss(draw, (560, 460, 1020, 475))
-
-    fg_color = (ACCENT_RED if fg_value < 25 else
-                ACCENT_GOLD if fg_value < 50 else
-                ACCENT_BLUE if fg_value < 75 else ACCENT_GREEN)
-
-    # Semi-circle gauge for Fear & Greed
-    _draw_gauge(draw, 790, 580, 100, fg_value, fg_label.upper(), fg_color)
-
-    # ── Barra inferior: Resumo do mercado ──
-    _rounded_rect(draw, (60, 680, 1020, 800), 24, fill=PANEL_BG)
-
-    # Métricas em linha
-    metrics_data = context.get("resumo", {})
-    metrics = [
-        ("DOMÍNIO BTC", metrics_data.get("btc_dominance", "58.2%"), ACCENT_BLUE),
-        ("VOLUME 24H", metrics_data.get("volume_24h", "$28.4B"), ACCENT_GOLD),
-        ("ALT SEASON", metrics_data.get("alt_season", "Não"), ACCENT_GOLD if "sim" in str(metrics_data.get("alt_season", "")).lower() else TEXT_GRAY),
-        ("TOTAL TRADES", str(context.get("total_trades", "—")), TEXT_WHITE),
-    ]
-
-    for i, (label, value, color) in enumerate(metrics):
-        x = 180 + i * 260
-        draw.text((x, 720), label, font=_get_font(11), fill=TEXT_GRAY, anchor="mm")
-        draw.text((x, 765), value, font=_get_font(20, bold=True), fill=color, anchor="mm")
-
-    # ── Sparkline BTC (opcional) ──
-    price_history = context.get("btc_price_history", [])
-    if price_history and len(price_history) >= 2:
-        _draw_sparkline(draw, (80, 196, 320, 240), price_history, ACCENT_BLUE)
-
-    return _finalize(img, "market")
-
-
-# ─── TRADE IMAGE ────────────────────────────────────────────────────
-
-def generate_trade_image(context: dict) -> str:
-    """
-    Gera imagem de resultados de trade:
-    - Win rate com gauge circular
-    - Lista de trades recentes
-    - P&L e saldo
-    """
-    img, draw = _generate_base_image("Resultados", "📈")
-
-    trades = context.get("ultimos_trades", [])
-    win_rate = context.get("win_rate_recente", 0)
-    pnl = context.get("pnl_total", 0)
-    saldo = context.get("saldo", 10000)
-
-    # ── Card: Win Rate (esquerda) ──
-    _rounded_rect(draw, (60, 180, 480, 440), 24, fill=PANEL_BG)
-    _draw_gloss(draw, (60, 180, 480, 195))
-
-    draw.text((270, 225), "WIN RATE", font=_get_font(14), fill=TEXT_GRAY, anchor="mm")
-    wr_color = ACCENT_GREEN if win_rate >= 50 else (ACCENT_GOLD if win_rate >= 30 else ACCENT_RED)
-
-    # Gauge circular completo
-    bbox = [270 - 80, 320 - 80, 270 + 80, 320 + 80]
-    draw.arc(bbox, 0, 360, fill=ACCENT_GREEN if win_rate >= 50 else ACCENT_RED, width=12)
-    draw.arc(bbox, 0, int(360 * win_rate / 100), fill=wr_color, width=12)
-
-    font_wr = _get_font(42, bold=True)
-    draw.text((270, 320), f"{win_rate}%", font=font_wr, fill=TEXT_WHITE, anchor="mm")
-    draw.text((270, 370), f"{len(trades)} trades", font=_get_font(14), fill=TEXT_GRAY, anchor="mm")
-
-    # ── Card: Últimos trades (direita) ──
-    _rounded_rect(draw, (520, 180, 1020, 440), 24, fill=PANEL_BG)
-    _draw_gloss(draw, (520, 180, 1020, 195))
-
-    draw.text((770, 220), "ÚLTIMOS TRADES", font=_get_font(14), fill=TEXT_GRAY, anchor="mm")
-
-    # Cabeçalho da tabela
-    draw.text((560, 252), "PAR", font=_get_font(10), fill=TEXT_DIM, anchor="mm")
-    draw.text((720, 252), "LADO", font=_get_font(10), fill=TEXT_DIM, anchor="mm")
-    draw.text((880, 252), "P&L", font=_get_font(10), fill=TEXT_DIM, anchor="mm")
-    draw.line([(540, 268), (1000, 268)], fill=GRID_LINE + (60,), width=1)
-
-    y = 290
-    for t in trades[:6]:
-        t_color = ACCENT_GREEN if t.get("pnl", 0) >= 0 else ACCENT_RED
-        emoji_t = "✅" if t.get("pnl", 0) >= 0 else "❌"
-        symbol = t.get("symbol", "???")
-        side = t.get("side", "???").upper()
-        t_pnl = t.get("pnl", 0)
-        t_sign = "+" if t_pnl >= 0 else ""
-
-        draw.text((560, y), f"{emoji_t} {symbol}", font=_get_font(14, bold=True), fill=TEXT_WHITE, anchor="mm")
-        draw.text((720, y), side, font=_get_font(12), fill=ACCENT_BLUE, anchor="mm")
-        draw.text((920, y), f"{t_sign}${t_pnl:.2f}", font=_get_font(14, bold=True), fill=t_color, anchor="mm")
-        y += 38
-
-    # ── Card: Resumo Financeiro ──
-    _rounded_rect(draw, (60, 480, 1020, 620), 24, fill=PANEL_BG)
-    _draw_gloss(draw, (60, 480, 1020, 495))
-
-    pnl_color = ACCENT_GREEN if pnl >= 0 else ACCENT_RED
-    pnl_sign = "+" if pnl >= 0 else ""
-
-    metrics = [
-        ("SALDO", f"${saldo:,.2f}", TEXT_WHITE),
-        ("P&L TOTAL", f"{pnl_sign}${pnl:,.2f}", pnl_color),
-        ("WIN RATE", f"{win_rate}%", wr_color),
-        ("TRADES", str(len(trades)), ACCENT_BLUE),
-    ]
-
-    for i, (label, value, color) in enumerate(metrics):
-        x = 180 + i * 240
-        draw.text((x, 530), label, font=_get_font(12), fill=TEXT_GRAY, anchor="mm")
-        draw.text((x, 575), value, font=_get_font(28, bold=True), fill=color, anchor="mm")
-        if i < len(metrics) - 1:
-            draw.line([(x + 100, 520), (x + 100, 600)], fill=GRID_LINE + (40,), width=1)
-
-    # ── Barra de progresso de trades vencidos vs perdidos (se houver dados) ──
-    wins = sum(1 for t in trades if t.get("pnl", 0) >= 0)
-    losses = len(trades) - wins
-    if len(trades) > 0:
-        _rounded_rect(draw, (60, 660, 1020, 740), 20, fill=PANEL_BG)
-        total_bar = 900
-        bar_x, bar_y = 90, 700
-        draw.rectangle([bar_x, bar_y, bar_x + total_bar, bar_y + 16], fill=(40, 40, 60))
-
-        if wins > 0:
-            win_w = int(total_bar * wins / len(trades))
-            draw.rectangle([bar_x, bar_y, bar_x + win_w, bar_y + 16], fill=ACCENT_GREEN + (200,))
-
-        draw.text((bar_x + total_bar // 2, bar_y + 8),
-                  f"{wins} Wins  •  {losses} Losses  •  {len(trades)} Total",
-                  font=_get_font(14, bold=True), fill=TEXT_WHITE, anchor="mm")
-
-    return _finalize(img, "trade")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -404,9 +653,13 @@ def generate_trade_image(context: dict) -> str:
 # ═══════════════════════════════════════════════════════════════════
 
 async def generate_image(context: dict, topic: str) -> str:
-    """Entry point async para gerar imagem baseada no tópico."""
+    """Gera publicação conforme o tópico usando o modelo apropriado."""
     loop = asyncio.get_event_loop()
-    if topic in ("trade",):
+    if topic == "trade":
         return await loop.run_in_executor(None, generate_trade_image, context)
+    elif topic == "insight":
+        return await loop.run_in_executor(None, generate_insight_image, context)
+    elif topic == "news":
+        return await loop.run_in_executor(None, generate_news_image, context)
     else:
         return await loop.run_in_executor(None, generate_market_image, context)
