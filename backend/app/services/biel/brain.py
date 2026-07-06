@@ -44,6 +44,39 @@ TOPIC_PROMPTS = {
     "news":    "Comente sobre as notícias recentes de cripto e como elas podem impactar o mercado.",
 }
 
+# Prompt extra para gerar dados visuais estruturados (INSIGHTS e NOTÍCIA)
+# O LLM deve retornar UM ÚNICO JSON contendo: caption (post Instagram) + visual data
+STRUCTURED_PROMPTS = {
+    "insight": """
+IMPORTANTE: Sua resposta deve ser APENAS UM OBJETO JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": o post completo para Instagram (seguindo personalidade Biel, máx 300 chars + hashtags)
+2. "question": pergunta provocativa sobre o mercado (máx 80 chars)
+3. "insights": array com 3 objetos, cada um com "icon" (emoji), "title" (máx 30 chars), "desc" (máx 100 chars)
+4. "ai_summary": resumo final (máx 120 chars)
+
+Exemplo de formato:
+{"caption": "O mercado está esquentando...\\n\\n#BTC #Crypto", "question": "Será que vem alta?", "insights": [{"icon": "📊", "title": "Acumulação", "desc": "Baleias comprando..."}, {"icon": "💧", "title": "Liquidez", "desc": "Fluxo crescendo..."}, {"icon": "📈", "title": "Tendência", "desc": "Estrutura altista..."}], "ai_summary": "Cenário misto mas construtivo."}
+
+Ícones relevantes: 📊 💧 📈 📉 🔥 🛡️ ⚡ 🧠 🏦 🔗 🌐 💎 🎯
+""",
+    "news": """
+IMPORTANTE: Sua resposta deve ser APENAS UM OBJETO JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": o post completo para Instagram (seguindo personalidade Biel, máx 300 chars + hashtags)
+2. "headline": manchete principal (máx 80 chars)
+3. "summary": resumo curto (máx 120 chars)
+4. "news_symbol": símbolo do ativo principal (ex: BTC, ETH, SOL)
+5. "impacts": array com 3 arrays [label, valor] — ex: ["Preço ETH", "+8.5%"]
+6. "source": Fonte da notícia (ex: CoinDesk, Reuters)
+
+Exemplo de formato:
+{"caption": "ETF de ETH aprovado!...\\n\\n#Ethereum #Crypto", "headline": "SEC Aprova ETFs Spot de Ethereum", "summary": "Marco histórico para o mercado cripto.", "news_symbol": "ETH", "impacts": [["Preço ETH", "+8.5%"], ["Preço BTC", "+2.1%"], ["Volume DEX", "+$420M"]], "source": "CoinDesk"}
+""",
+}
+
 
 def _detect_provider(api_key: str) -> str:
     """Detecta o provider pelo prefixo da chave."""
@@ -52,10 +85,13 @@ def _detect_provider(api_key: str) -> str:
     return "gemini"
 
 
-async def generate_post(context: dict, topic: str, api_key: str) -> str:
+async def generate_post(context: dict, topic: str, api_key: str) -> dict:
     """
     Gera um post para o Instagram.
-    Detecta automaticamente Gemini (AIza/AQ.) ou Groq (gsk_).
+    
+    Retorna dict:
+      {"caption": "texto do post"} — para market/trade
+      {"caption": "texto", "visual": {...}} — para insight/news (com dados estruturados)
     """
     provider = _detect_provider(api_key)
     logger.info(f"[biel/brain] Provider detectado: {provider}")
@@ -63,21 +99,95 @@ async def generate_post(context: dict, topic: str, api_key: str) -> str:
     topic_instruction = TOPIC_PROMPTS.get(topic, TOPIC_PROMPTS["market"])
     context_text = _format_context(context)
 
+    structured_instruction = STRUCTURED_PROMPTS.get(topic, "")
+
+    max_tokens = 800 if topic in ("insight", "news") else 400
+
     prompt = f"""{topic_instruction}
 
 CONTEXTO ATUAL DO TRADEAI:
 {context_text}
 
 Gere um post para o Instagram seguindo as instruções de personalidade.
+{structured_instruction}
 """
 
     if provider == "groq":
-        return await _generate_groq(api_key, prompt)
+        raw = await _generate_groq(api_key, prompt, max_tokens)
     else:
-        return await _generate_gemini(api_key, prompt)
+        raw = await _generate_gemini(api_key, prompt, max_tokens)
+
+    # Tentar extrair JSON do retorno (para insight/news)
+    if topic in ("insight", "news"):
+        result = _try_extract_structured(raw, topic)
+        if result:
+            logger.info(f"[biel/brain] JSON estruturado extraído para {topic}")
+            return result
+        # Fallback: se não conseguir parsear, retorna só caption
+        logger.warning(f"[biel/brain] Falha ao extrair JSON para {topic}, retornando só caption")
+
+    return {"caption": raw.strip()}
 
 
-async def _generate_groq(api_key: str, prompt: str) -> str:
+def _try_extract_structured(raw: str, topic: str = "") -> dict | None:
+    """
+    Tenta extrair um JSON estruturado da resposta da IA.
+    O JSON pode estar no formato:
+      { "caption": "...", "visual": { ... } }
+    Ou iniciar direto com { "question": ... } (insight) ou { "headline": ... } (news).
+    """
+    import json
+    import re
+
+    text = raw.strip()
+
+    # Remove ```json ... ``` se existir
+    code_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+    if code_match:
+        text = code_match.group(1).strip()
+
+    # Encontra o primeiro { e último }
+    brace_start = text.find('{')
+    brace_end = text.rfind('}')
+    if brace_start == -1 or brace_end == -1:
+        return None
+
+    json_str = text[brace_start:brace_end + 1]
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        # Tentar limpar caracteres problemáticos
+        cleaned = re.sub(r',\s*}', '}', json_str)  # trailing commas
+        cleaned = re.sub(r',\s*]', ']', cleaned)
+        cleaned = re.sub(r'[\u201c\u201d]', '"', cleaned)  # smart quotes
+        cleaned = re.sub(r"[\u2018\u2019]", "'", cleaned)
+        try:
+            data = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return None
+
+    # Se já veio no formato { caption, ... }
+    if "caption" in data:
+        # Extrair campos visuais (tudo exceto caption) para dentro de "visual"
+        visual_keys = [k for k in data if k != "caption"]
+        if visual_keys:
+            data["visual"] = {k: data.pop(k) for k in visual_keys}
+        else:
+            data["visual"] = {}
+        return data
+
+    # Se veio só os dados visuais sem caption, tenta extrair caption do resto do texto
+    if topic in ("insight", "news") and ("question" in data or "headline" in data):
+        caption = text[:brace_start].strip() + text[brace_end + 1:].strip()
+        if not caption:
+            caption = f"Confira nossa análise de {data.get('news_symbol', 'mercado')}!"
+        return {"caption": caption, "visual": data}
+
+    return None
+
+
+async def _generate_groq(api_key: str, prompt: str, max_tokens: int = 400) -> str:
     """Gera texto via Groq (OpenAI-compatible API)."""
     # Garantir que o prompt é string (não lista/dict)
     if not isinstance(prompt, str):
@@ -93,7 +203,7 @@ async def _generate_groq(api_key: str, prompt: str) -> str:
             {"role": "user",   "content": [{"type": "text", "text": prompt}]},
         ],
         "temperature": 0.8,
-        "max_tokens": 400,
+        "max_tokens": max_tokens,
         "top_p": 0.9,
     }
 
@@ -146,7 +256,7 @@ async def _generate_groq(api_key: str, prompt: str) -> str:
         raise
 
 
-async def _generate_gemini(api_key: str, prompt: str) -> str:
+async def _generate_gemini(api_key: str, prompt: str, max_tokens: int = 400) -> str:
     """Gera texto via Gemini 2.0 Flash."""
     payload = {
         "system_instruction": {
@@ -157,7 +267,7 @@ async def _generate_gemini(api_key: str, prompt: str) -> str:
         ],
         "generationConfig": {
             "temperature": 0.8,
-            "maxOutputTokens": 400,
+            "maxOutputTokens": max_tokens,
             "topP": 0.9,
         }
     }

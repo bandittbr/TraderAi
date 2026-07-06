@@ -121,8 +121,14 @@ async def run_post(
         context = await build_context()
         logger.info(f"[biel/engine] Contexto coletado: {list(context.keys())}")
 
-        # 2. Gerar texto
-        caption = await generate_post(context, topic, config.gemini_api_key)
+        # 2. Gerar texto + dados visuais estruturados
+        brain_result = await generate_post(context, topic, config.gemini_api_key)
+        caption = brain_result["caption"]
+        # Mesclar dados visuais no contexto (para insight/news)
+        if "visual" in brain_result and brain_result["visual"]:
+            enriched = brain_result["visual"]
+            context.update(enriched)
+            logger.info(f"[biel/engine] Dados visuais mesclados: {list(enriched.keys())}")
         logger.info(f"[biel/engine] Caption gerada ({len(caption)} chars)")
 
         if post_type == "reel":
