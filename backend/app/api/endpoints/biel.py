@@ -213,6 +213,61 @@ async def verify_token():
         return {"valid": False, "error": str(e), "stored_prefix": stored_prefix}
 
 
+@router.get("/token/diagnose")
+async def diagnose_token():
+    """
+    Diagnóstico completo do token — testa /me, debug_token, e proxy env.
+    """
+    import os
+    token = await get_active_token()
+    if not token:
+        return {"error": "Nenhum token no banco"}
+
+    diag = {
+        "token_prefix": token.access_token[:30] + "...",
+        "account_id": token.account_id,
+        "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+        "proxy_env": {
+            "HTTP_PROXY": os.environ.get("HTTP_PROXY"),
+            "HTTPS_PROXY": os.environ.get("HTTPS_PROXY"),
+            "ALL_PROXY": os.environ.get("ALL_PROXY"),
+            "http_proxy": os.environ.get("http_proxy"),
+            "https_proxy": os.environ.get("https_proxy"),
+        },
+    }
+
+    try:
+        # Teste 1: chamada direta com httpx (igual ao fluxo real)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r1 = await client.get(
+                "https://graph.facebook.com/v19.0/me",
+                params={"access_token": token.access_token, "fields": "id,name"}
+            )
+            diag["test_me"] = {
+                "status": r1.status_code,
+                "body": r1.json(),
+            }
+    except Exception as e:
+        diag["test_me"] = {"error": str(e)}
+
+    try:
+        # Teste 2: debug_token via app_token
+        app_token = f"{token.app_id}|{token.app_secret}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r2 = await client.get(
+                "https://graph.facebook.com/v19.0/debug_token",
+                params={"input_token": token.access_token, "access_token": app_token}
+            )
+            diag["test_debug"] = {
+                "status": r2.status_code,
+                "body": r2.json(),
+            }
+    except Exception as e:
+        diag["test_debug"] = {"error": str(e)}
+
+    return diag
+
+
 # ── Atualizar apenas o token (sem refazer setup completo) ─────────────────────
 
 class TokenUpdateRequest(BaseModel):
