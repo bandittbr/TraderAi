@@ -1,13 +1,14 @@
 """
-Biel — Context Builder
-Coleta dados reais do TradeAI para alimentar o cérebro do Biel.
+Biel — Context Builder (v2)
+Coleta dados reais do TradeAI para alimentar o cérebro do Biel e os modelos visuais.
+Inclui dados enriquecidos para os 4 temas (market, trade, insight, news).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, desc
 from app.database import AsyncSessionLocal
 from app.models.paper_trading import PaperAccount, PaperTrade
-from app.models.market import MarketCandle
+from app.models.market import MarketCandle, MarketStat
 from app.models.market_context import FearGreedIndex, MarketNews
 from app.models.analytics import MarketRegime
 from app.logger import get_logger
@@ -19,6 +20,7 @@ async def build_context() -> dict:
     """
     Retorna um dicionário com o estado atual do TradeAI
     para ser usado como contexto na geração de posts do Biel.
+    Inclui dados enriquecidos para os 4 modelos visuais.
     """
     async with AsyncSessionLocal() as session:
         ctx = {}
@@ -37,7 +39,7 @@ async def build_context() -> dict:
         except Exception as e:
             logger.warning(f"[biel/context] Conta: {e}")
 
-        # ── Últimos trades ─────────────────────────────────────────────────
+        # ── Últimos trades (enriquecido) ──────────────────────────────────
         try:
             result = await session.execute(
                 select(PaperTrade)
@@ -48,11 +50,15 @@ async def build_context() -> dict:
             trades = result.scalars().all()
             ctx["ultimos_trades"] = [
                 {
-                    "symbol":    t.symbol,
-                    "side":      t.trade_side,
-                    "pnl":       round(t.pnl or 0, 2),
-                    "pnl_pct":   round(t.pnl_pct or 0, 2),
-                    "resultado": "WIN" if (t.pnl or 0) > 0 else "LOSS",
+                    "symbol":     t.symbol,
+                    "side":       t.trade_side,
+                    "entry_price": round(t.entry_price, 2),
+                    "exit_price":  round(t.exit_price, 2) if t.exit_price else None,
+                    "pnl":        round(t.pnl or 0, 2),
+                    "pnl_pct":    round(t.pnl_pct or 0, 2),
+                    "resultado":  "WIN" if (t.pnl or 0) > 0 else "LOSS",
+                    "close_reason": t.close_reason or "",
+                    "tp1_hit":    bool(t.tp1_hit),
                 }
                 for t in trades
             ]
@@ -104,20 +110,101 @@ async def build_context() -> dict:
         except Exception as e:
             logger.warning(f"[biel/context] News: {e}")
 
-        # ── Preço atual BTC ────────────────────────────────────────────────
+        # ── BTC: Preço atual + variação 24h + histórico (MERCADO) ─────────
+        try:
+            result = await session.execute(
+                select(MarketStat)
+                .where(MarketStat.symbol == "BTCUSDT")
+                .limit(1)
+            )
+            stat = result.scalar_one_or_none()
+            if stat:
+                ctx["btc_price"]     = round(stat.price, 2)
+                ctx["btc_change_24h"] = round(stat.change_24h, 2)
+                ctx["volume_24h"]    = stat.volume_24h
+        except Exception as e:
+            logger.warning(f"[biel/context] MarketStat: {e}")
+
+        # Fallback: se MarketStat não existir, tenta pelo último candle
+        if "btc_price" not in ctx:
+            try:
+                result = await session.execute(
+                    select(MarketCandle)
+                    .where(MarketCandle.symbol == "BTCUSDT")
+                    .where(MarketCandle.timeframe == "1h")
+                    .order_by(desc(MarketCandle.timestamp))
+                    .limit(1)
+                )
+                candle = result.scalar_one_or_none()
+                if candle:
+                    ctx["btc_price"] = round(candle.close, 2)
+            except Exception as e:
+                logger.warning(f"[biel/context] BTC candle fallback: {e}")
+
+        # ── Histórico de preços BTC (últimas 24h → sparkline) ────────────
+        try:
+            cutoff = int((datetime.now(timezone.utc) - timedelta(hours=24)).timestamp())
+            result = await session.execute(
+                select(MarketCandle)
+                .where(MarketCandle.symbol == "BTCUSDT")
+                .where(MarketCandle.timeframe == "1h")
+                .where(MarketCandle.timestamp >= cutoff)
+                .order_by(MarketCandle.timestamp)
+            )
+            candles = result.scalars().all()
+            if candles:
+                ctx["btc_price_history"] = [round(c.close, 2) for c in candles]
+                ctx["candle_history"] = [
+                    {
+                        "open":   round(c.open, 2),
+                        "high":   round(c.high, 2),
+                        "low":    round(c.low, 2),
+                        "close":  round(c.close, 2),
+                        "volume": c.volume,
+                    }
+                    for c in candles[-24:]  # máximo 24 candles
+                ]
+        except Exception as e:
+            logger.warning(f"[biel/context] BTC history: {e}")
+
+        # ── Resumo de mercado (MERCADO cards) ──────────────────────────────
+        try:
+            result = await session.execute(
+                select(MarketStat)
+                .where(MarketStat.symbol == "BTCUSDT")
+                .limit(1)
+            )
+            stat = result.scalar_one_or_none()
+            if stat:
+                dom = "58.2%"  # dominância não está no banco — manter fallback
+                vol_str = f"${stat.volume_24h:,.1f}" if stat.volume_24h >= 1_000_000_000 else f"${stat.volume_24h:,.0f}"
+                ctx["resumo"] = {
+                    "btc_dominance": dom,
+                    "volume_24h":    vol_str,
+                }
+        except Exception as e:
+            logger.warning(f"[biel/context] Resumo: {e}")
+
+        # ── Candle mais recente (TRADE model) ─────────────────────────────
         try:
             result = await session.execute(
                 select(MarketCandle)
                 .where(MarketCandle.symbol == "BTCUSDT")
                 .where(MarketCandle.timeframe == "1h")
-                .order_by(desc(MarketCandle.open_time))
+                .order_by(desc(MarketCandle.timestamp))
                 .limit(1)
             )
-            candle = result.scalar_one_or_none()
-            if candle:
-                ctx["btc_price"] = round(candle.close, 2)
+            c = result.scalar_one_or_none()
+            if c:
+                ctx["last_candle"] = {
+                    "open":   round(c.open, 2),
+                    "high":   round(c.high, 2),
+                    "low":    round(c.low, 2),
+                    "close":  round(c.close, 2),
+                    "volume": c.volume,
+                }
         except Exception as e:
-            logger.warning(f"[biel/context] BTC price: {e}")
+            logger.warning(f"[biel/context] Last candle: {e}")
 
         ctx["timestamp"] = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
         return ctx
