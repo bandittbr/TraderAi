@@ -79,16 +79,26 @@ Gere um post para o Instagram seguindo as instruções de personalidade.
 
 async def _generate_groq(api_key: str, prompt: str) -> str:
     """Gera texto via Groq (OpenAI-compatible API)."""
+    # Garantir que o prompt é string (não lista/dict)
+    if not isinstance(prompt, str):
+        logger.error(f"[biel/brain] prompt não é string! type={type(prompt).__name__}, repr={repr(prompt)[:200]}")
+        prompt = str(prompt)
+
+    # Usar formato explícito de array de texto — elimina qualquer ambiguidade
+    # com image_url no payload enviado ao Groq
     payload = {
         "model": GROQ_MODEL,
         "messages": [
-            {"role": "system", "content": BIEL_SYSTEM_PROMPT.strip()},
-            {"role": "user",   "content": prompt},
+            {"role": "system", "content": [{"type": "text", "text": BIEL_SYSTEM_PROMPT.strip()}]},
+            {"role": "user",   "content": [{"type": "text", "text": prompt}]},
         ],
         "temperature": 0.8,
         "max_tokens": 400,
         "top_p": 0.9,
     }
+
+    logger.info(f"[biel/brain] Groq content type: {type(payload['messages'][1]['content']).__name__}")
+    logger.info(f"[biel/brain] Groq prompt preview (100 chars): {prompt[:100]}")
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -117,7 +127,19 @@ async def _generate_groq(api_key: str, prompt: str) -> str:
             return text
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"[biel/brain] Groq HTTP error {e.response.status_code}: {e.response.text}")
+        error_body = e.response.text
+        logger.error(f"[biel/brain] Groq HTTP error {e.response.status_code}: {error_body}")
+
+        # Se Groq rejeitou por imagem (model text-only), sugerir trocar a chave
+        if "does not support image input" in error_body:
+            msg = (
+                "Groq rejeitou o request porque o modelo llama-3.3-70b-versatile é text-only. "
+                "Troque a chave API para uma chave Gemini (AIza...) no setup do Biel. "
+                f"Detalhes: {error_body[:200]}"
+            )
+            logger.error(f"[biel/brain] {msg}")
+            raise ValueError(msg)
+
         raise
     except Exception as e:
         logger.error(f"[biel/brain] Erro Groq: {e}")
