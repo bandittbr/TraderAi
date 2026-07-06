@@ -177,39 +177,33 @@ export default function ControlCenter() {
 
   useEffect(() => {
     // ── Paper Trading stats — usa getPaperStats() => GET /api/v1/paper/stats ──
-    console.log("[ControlCenter] Fetching: /api/v1/paper/stats via getPaperStats()");
     getPaperStats()
       .then(data => {
-        console.log("[ControlCenter] /paper/stats payload:", data);
         if (data) setStats(data);
       })
-      .catch(err => console.error("[ControlCenter] /paper/stats error:", err));
+      .catch(() => {});
 
     // ── Regime atual — GET /api/v1/analytics/regime/BTCUSDT ──────────────────
     const regimeUrl = "/api/v1/analytics/regime/BTCUSDT?timeframe=1h&history_limit=1";
-    console.log("[ControlCenter] Fetching:", regimeUrl);
     fetch(regimeUrl)
       .then(r => r.json())
       .then((d: unknown) => {
-        console.log("[ControlCenter] /analytics/regime payload:", d);
         const body = d as RegimeHistoryResponse;
         if (body?.current) setRegime(body.current);
       })
-      .catch(err => console.error("[ControlCenter] /analytics/regime error:", err));
+      .catch(() => {});
 
     // ── Sinais de hoje — GET /api/v1/analytics/signals ───────────────────────
     const today = new Date().toISOString().split("T")[0] ?? "";
     const signalsUrl = "/api/v1/analytics/signals?limit=500";
-    console.log("[ControlCenter] Fetching:", signalsUrl);
     fetch(signalsUrl)
       .then(r => r.json())
       .then((d: unknown) => {
-        console.log("[ControlCenter] /analytics/signals payload (first item):", Array.isArray(d) ? d[0] : d);
         const arr = safeArray<SignalRow>(Array.isArray(d) ? d : ((d as { signals?: unknown[] })?.signals ?? []));
         const count = arr.filter(s => safeString(s?.created_at ?? s?.timestamp).startsWith(today)).length;
         setSignalsToday(count);
       })
-      .catch(err => console.error("[ControlCenter] /analytics/signals error:", err));
+      .catch(() => {});
 
     // ── System health ─────────────────────────────────────────────────────────
     const checkHealth = async () => {
@@ -272,7 +266,7 @@ export default function ControlCenter() {
 
   const bkLevel = health?.backend ?? "loading";
 
-  console.log("[ControlCenter] Render — stats:", stats, "regime:", regime, "signalsToday:", signalsToday);
+  // render
 
   return (
     <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-8">
@@ -337,7 +331,7 @@ export default function ControlCenter() {
               {([
                 ["Backend",  "FastAPI + SQLAlchemy"],
                 ["DB",       "SQLite + aiosqlite"],
-                ["Frontend", "Next.js 15 + Tailwind"],
+                ["Frontend", "Next.js 14 + Tailwind"],
                 ["Dados",    "Binance REST + WS"],
               ] as [string, string][]).map(([k, v]) => (
                 <div key={k} className="flex justify-between text-[10px]">

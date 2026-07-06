@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # ── Aplicação ──────────────────────────────────────────────────────────────
     app_name: str = "TradeAI"
-    app_version: str = "1.0.0"
+    app_version: str = "12.5.0"
     app_env: str = "development"
     app_host: str = "127.0.0.1"
     app_port: int = 8000

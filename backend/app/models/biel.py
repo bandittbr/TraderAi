@@ -49,7 +49,7 @@ class BielConfig(Base):
     __tablename__ = "biel_config"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    gemini_api_key      = Column(Text, nullable=False)
+    gemini_api_key      = Column(Text, nullable=False)   # FIXME: criptografar antes de salvar (ver PENTEFINO.md)
     posts_per_day       = Column(Integer, default=4)
     post_hours          = Column(String(50), default="8,12,18,22")  # Horários dos posts
     persona_name        = Column(String(50), default="Biel")

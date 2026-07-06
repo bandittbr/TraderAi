@@ -21,8 +21,10 @@ logger = get_logger(__name__)
 
 TOPICS = ["market", "trade", "insight", "news"]
 
-# URL base pública do backend (Railway)
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://traderai-production-cfe4.up.railway.app")
+# URL base pública do backend (configurada via ambiente — Railway, local, etc.)
+# Em produção: setar BACKEND_URL no dashboard do Railway
+# Em dev: http://localhost:8000 (ou 127.0.0.1:8000)
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
 
 def _get_topic_for_post_number(n: int) -> str:

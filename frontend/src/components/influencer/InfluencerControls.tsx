@@ -26,6 +26,11 @@ export default function InfluencerControls({ status, onRefresh }: ControlsProps)
   const [posting, setPosting] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [renewing, setRenewing] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<any>(null);
+  const [newToken, setNewToken] = useState("");
+  const [updatingToken, setUpdatingToken] = useState(false);
+  const [tokenMsg, setTokenMsg] = useState("");
 
   const forcePost = async (topic: string) => {
     setPosting(topic);
@@ -61,6 +66,43 @@ export default function InfluencerControls({ status, onRefresh }: ControlsProps)
       setMsg("❌ Erro ao renovar token");
     }
     setRenewing(false);
+  };
+
+  const verifyToken = async () => {
+    setVerifying(true);
+    setVerifyResult(null);
+    try {
+      const r = await fetch("/api/v1/biel/token/verify");
+      const j = await r.json();
+      setVerifyResult(j);
+    } catch {
+      setVerifyResult({ valid: false, error: "Erro de conexão" });
+    }
+    setVerifying(false);
+  };
+
+  const updateToken = async () => {
+    if (!newToken.trim()) { setTokenMsg("❌ Cole o novo token"); return; }
+    setUpdatingToken(true);
+    setTokenMsg("");
+    try {
+      const r = await fetch("/api/v1/biel/token/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: newToken.trim() }),
+      });
+      const j = await r.json();
+      if (r.ok) {
+        setTokenMsg(`✅ Token atualizado! Prefixo: ${j.token_prefix}`);
+        setNewToken("");
+        onRefresh();
+      } else {
+        setTokenMsg(`❌ ${j.detail || "Erro desconhecido"}`);
+      }
+    } catch {
+      setTokenMsg("❌ Erro de conexão");
+    }
+    setUpdatingToken(false);
   };
 
   const tokenDays = status.token_days_left;

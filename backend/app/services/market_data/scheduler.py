@@ -399,8 +399,9 @@ async def start_background_tasks() -> list:
         asyncio.create_task(candle_sync_loop(),       name="candle_sync"),
         asyncio.create_task(stats_sync_loop(),        name="stats_sync"),
         asyncio.create_task(binance_ws_loop(),        name="binance_ws"),
-        asyncio.create_task(indicator_sync_loop(),    name="indicator_sync"),
-        asyncio.create_task(indicator_1h_loop(),      name="indicator_1h"),   # Phase 13
+        # Phase 13: loops especializados de indicadores (1h + 15m)
+        # NOTA: indicator_sync_loop (antigo) foi removido — coberto pelos especializados
+        asyncio.create_task(indicator_1h_loop(),      name="indicator_1h"),
         asyncio.create_task(indicator_15m_loop(),     name="indicator_15m"),  # Phase 13
         asyncio.create_task(news_sync_loop(),         name="news_sync"),
         asyncio.create_task(fear_greed_sync_loop(),   name="fear_greed_sync"),
@@ -484,11 +485,6 @@ async def robustness_sync_loop() -> None:
         except Exception as exc:
             logger.warning("[phase10] robustness_sync_loop: %s", exc)
         await asyncio.sleep(ROBUSTNESS_SYNC_INTERVAL_SECS)
-
-
-STRATEGY_SYNC_INTERVAL_SECS = 86400   # 24 horas
-
-
 
 
 STRATEGY_SYNC_INTERVAL_SECS = 86400   # 24 horas

@@ -4,12 +4,13 @@ Gerenciamento do agente Biel: configuração, posts, tokens.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from pathlib import Path
+import httpx
 
 from app.database import AsyncSessionLocal
 from app.models.biel import BielPost, BielToken, BielConfig
@@ -166,6 +167,121 @@ async def renew_token():
     }
 
 
+# ── Verificar token atual contra Facebook API ─────────────────────────────────
+
+@router.get("/token/verify")
+async def verify_token():
+    """
+    Verifica se o token armazenado no banco é válido consultando a Facebook API.
+    Retorna info do usuário ou erro detalhado.
+    """
+    token = await get_active_token()
+    if not token:
+        return {"valid": False, "error": "Nenhum token no banco", "stored_prefix": None}
+
+    stored_prefix = token.access_token[:20] + "..." if token.access_token else None
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                "https://graph.facebook.com/v19.0/me",
+                params={
+                    "access_token": token.access_token,
+                    "fields": "id,name",
+                }
+            )
+            data = resp.json()
+            if resp.is_success and "id" in data:
+                return {
+                    "valid": True,
+                    "user_id": data.get("id"),
+                    "user_name": data.get("name"),
+                    "stored_prefix": stored_prefix,
+                    "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+                    "account_id": token.account_id,
+                }
+            else:
+                err = data.get("error", {})
+                return {
+                    "valid": False,
+                    "error": err.get("message", resp.text),
+                    "error_code": err.get("code"),
+                    "stored_prefix": stored_prefix,
+                    "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+                }
+    except Exception as e:
+        return {"valid": False, "error": str(e), "stored_prefix": stored_prefix}
+
+
+# ── Atualizar apenas o token (sem refazer setup completo) ─────────────────────
+
+class TokenUpdateRequest(BaseModel):
+    access_token: str
+    app_id: str | None = None
+    app_secret: str | None = None
+
+
+@router.post("/token/update")
+async def update_token(data: TokenUpdateRequest):
+    """
+    Atualiza apenas o access token no banco, sem refazer o setup completo.
+    Tenta converter para long-lived se app_id e app_secret forem fornecidos.
+    Útil quando o token expirou mas o restante da configuração está OK.
+    """
+    token = await get_active_token()
+    if not token:
+        raise HTTPException(status_code=404, detail="Nenhum token configurado. Use /biel/setup primeiro.")
+
+    now = datetime.now(timezone.utc)
+    new_token_str = data.access_token
+    expires_at = now + timedelta(days=60)
+
+    # Tentar trocar por long-lived se credenciais fornecidas
+    app_id     = data.app_id     or token.app_id
+    app_secret = data.app_secret or token.app_secret
+
+    if app_id and app_secret:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    "https://graph.facebook.com/v19.0/oauth/access_token",
+                    params={
+                        "grant_type":        "fb_exchange_token",
+                        "client_id":         app_id,
+                        "client_secret":     app_secret,
+                        "fb_exchange_token": data.access_token,
+                    }
+                )
+                if resp.is_success:
+                    ex_data    = resp.json()
+                    new_token_str = ex_data.get("access_token", data.access_token)
+                    expires_in    = ex_data.get("expires_in", 5183944)
+                    expires_at    = now + timedelta(seconds=expires_in)
+                    logger.info(f"[biel/api] Token trocado por long-lived. Expira: {expires_at.date()}")
+                else:
+                    logger.warning(f"[biel/api] Exchange falhou ({resp.status_code}): {resp.text}. Usando token direto.")
+        except Exception as e:
+            logger.warning(f"[biel/api] Exchange exception: {e}. Usando token direto.")
+
+    async with AsyncSessionLocal() as session:
+        db_token = await session.get(BielToken, token.id)
+        db_token.access_token    = new_token_str
+        db_token.expires_at      = expires_at
+        db_token.last_renewed_at = now
+        db_token.is_active       = True
+        if app_id:     db_token.app_id     = app_id
+        if app_secret: db_token.app_secret = app_secret
+        await session.commit()
+
+    logger.info(f"[biel/api] Token atualizado. Expira: {expires_at.date()}")
+    return {
+        "status": "ok",
+        "token_prefix": new_token_str[:20] + "...",
+        "expires_at": expires_at.isoformat(),
+        "account_id": token.account_id,
+    }
+
+
 # ── Histórico de posts ────────────────────────────────────────────────────────
 
 @router.get("/posts")
@@ -201,7 +317,6 @@ async def list_posts(limit: int = 50):
 @router.get("/stats")
 async def get_stats():
     """Retorna estatísticas de publicação."""
-    from sqlalchemy import func
     async with AsyncSessionLocal() as session:
         total = await session.execute(select(func.count(BielPost.id)))
         published = await session.execute(
@@ -225,8 +340,7 @@ async def get_metrics():
     Métricas completas do Biel para o painel Influencer.
     Inclui: posts por período, por tópico, próximo post, agenda do dia.
     """
-    from sqlalchemy import func, cast, Date
-    from datetime import date, timedelta
+    from datetime import date
 
     now = datetime.now(timezone.utc)
     today = now.date()
