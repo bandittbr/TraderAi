@@ -5,5 +5,5 @@ builder = "NIXPACKS"
 # NOTA: o Nixpacks usa `cd backend &&` (nixpacks.toml),
 # então railway.toml também parte de backend/ para consistência
 startCommand = "mkdir -p data logs && cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-healthcheckPath = "/api/v1/system/health"
-healthcheckTimeout = 30
+healthcheckPath = "/"
+healthcheckTimeout = 60
