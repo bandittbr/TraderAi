@@ -6,6 +6,7 @@ interface Slot {
   done: boolean;
   is_next: boolean;
   is_past: boolean;
+  post_type?: "image" | "reel";
 }
 
 interface ScheduleProps {
@@ -64,6 +65,11 @@ export default function InfluencerSchedule({ slots, nextLabel, nextMinutes }: Sc
                 </div>
               )}
               <div style={{ fontSize: 20 }}>{icon}</div>
+              {slot.post_type === "reel" && (
+                <div style={{ fontSize: 8, color: "#c084fc", background: "#2a1a4a", border: "1px solid #8b5cf644", padding: "1px 6px", borderRadius: 6, display: "inline-block", marginTop: 4 }}>
+                  REEL
+                </div>
+              )}
               <div style={{ color: labelColor, fontSize: 15, fontWeight: 800, marginTop: 6 }}>
                 {slot.label}
               </div>

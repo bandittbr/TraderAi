@@ -4,13 +4,13 @@ import { useState } from "react";
 interface Post {
   id: number;
   post_type: string;
-  topic: string;
+  topic: string | null;
   reel_topic: string | null;
   status: string;
   instagram_id: string | null;
   caption: string | null;
-  image_path: string | null;
   video_path: string | null;
+  image_path: string | null;
   regime: string | null;
   pnl_snapshot: number | null;
   error: string | null;
@@ -18,11 +18,13 @@ interface Post {
   created_at: string | null;
 }
 
-const TOPIC_META: Record<string, { label: string; color: string; emoji: string }> = {
-  market:  { label: "Mercado",  color: "#60a5fa", emoji: "📊" },
-  trade:   { label: "Trade",    color: "#00ff88", emoji: "📈" },
-  insight: { label: "Insight",  color: "#ffd700", emoji: "💡" },
-  news:    { label: "Notícia",  color: "#c084fc", emoji: "📰" },
+const REEL_TOPIC_META: Record<string, { label: string; color: string; emoji: string }> = {
+  meme:         { label: "Meme",        color: "#ffd700", emoji: "😂" },
+  noticias:     { label: "Notícias",    color: "#60a5fa", emoji: "📰" },
+  insight:      { label: "Insight",     color: "#00ff88", emoji: "💡" },
+  profits:      { label: "Profits",     color: "#00ff88", emoji: "💰" },
+  erros:        { label: "Erros",       color: "#ff4444", emoji: "😅" },
+  aprendizados: { label: "Aprendizados", color: "#c084fc", emoji: "📚" },
 };
 
 function statusBadge(s: string) {
@@ -51,29 +53,29 @@ function timeAgo(iso: string | null) {
   return `${Math.floor(diff / 86400)}d atrás`;
 }
 
-export default function InfluencerFeed({ posts }: { posts: Post[] }) {
+export default function InfluencerReelsFeed({ posts }: { posts: Post[] }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
-  const filtered = filter === "all" ? posts.filter(p => !p.post_type || p.post_type === "image")
-    : posts.filter(p => p.topic === filter || p.status === filter);
+  const reels = posts.filter(p => p.post_type === "reel");
+  const filtered = filter === "all" ? reels : reels.filter(p => p.reel_topic === filter || p.status === filter);
 
   return (
     <div style={{ background: "#0d1525", border: "1px solid #141c2e", borderRadius: 12, padding: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: 14 }}>
-          📋 Feed de Posts ({posts.length})
+        <div style={{ color: "#c084fc", fontWeight: 700, fontSize: 14 }}>
+          🎬 Reels Publicados ({reels.length})
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {["all", "market", "trade", "insight", "news", "failed"].map(f => (
+          {["all", "meme", "noticias", "insight", "profits", "erros", "aprendizados", "failed"].map(f => (
             <button key={f} onClick={() => setFilter(f)}
               style={{
                 fontSize: 10, padding: "3px 10px", borderRadius: 8, cursor: "pointer",
-                background: filter === f ? "#1e3a5f" : "#060d1a",
-                color: filter === f ? "#60a5fa" : "#3d5a80",
-                border: `1px solid ${filter === f ? "#2563eb" : "#141c2e"}`,
+                background: filter === f ? "#2a1a4a" : "#060d1a",
+                color: filter === f ? "#c084fc" : "#3d5a80",
+                border: `1px solid ${filter === f ? "#8b5cf6" : "#141c2e"}`,
               }}>
-              {f === "all" ? "Todos" : f === "failed" ? "❌ Erros" : (TOPIC_META[f]?.emoji + " " + TOPIC_META[f]?.label)}
+              {f === "all" ? "Todos" : f === "failed" ? "❌ Erros" : (REEL_TOPIC_META[f]?.emoji + " " + REEL_TOPIC_META[f]?.label)}
             </button>
           ))}
         </div>
@@ -81,13 +83,13 @@ export default function InfluencerFeed({ posts }: { posts: Post[] }) {
 
       {filtered.length === 0 && (
         <div style={{ color: "#3d5a80", fontSize: 12, textAlign: "center", padding: 30 }}>
-          Nenhum post encontrado.
+          Nenhum reel encontrado.
         </div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 600, overflowY: "auto" }}>
         {filtered.map(p => {
-          const meta = TOPIC_META[p.topic] || { label: p.topic, color: "#888", emoji: "📌" };
+          const meta = REEL_TOPIC_META[p.reel_topic || ""] || { label: p.reel_topic || "reel", color: "#888", emoji: "🎬" };
           const isOpen = expanded === p.id;
           return (
             <div key={p.id}
@@ -106,22 +108,7 @@ export default function InfluencerFeed({ posts }: { posts: Post[] }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ color: meta.color, fontWeight: 700, fontSize: 12 }}>{meta.label}</span>
-                    {p.post_type === "reel" && (
-                      <span style={{ fontSize: 9, color: "#c084fc", background: "#2a1a4a22", border: "1px solid #8b5cf644", padding: "1px 6px", borderRadius: 6 }}>
-                        🎬 REEL
-                      </span>
-                    )}
                     {statusBadge(p.status)}
-                    {p.regime && (
-                      <span style={{ fontSize: 9, color: "#3d5a80", background: "#141c2e", padding: "1px 6px", borderRadius: 6 }}>
-                        {p.regime}
-                      </span>
-                    )}
-                    {p.pnl_snapshot !== null && (
-                      <span style={{ fontSize: 10, color: p.pnl_snapshot >= 0 ? "#00ff88" : "#ff4444", fontWeight: 700 }}>
-                        {p.pnl_snapshot >= 0 ? "+" : ""}${p.pnl_snapshot?.toFixed(2)}
-                      </span>
-                    )}
                   </div>
                   {p.caption && (
                     <div style={{
@@ -161,9 +148,9 @@ export default function InfluencerFeed({ posts }: { posts: Post[] }) {
                         🔗 Instagram ID: <span style={{ color: "#60a5fa", fontFamily: "monospace" }}>{p.instagram_id}</span>
                       </div>
                     )}
-                    {p.image_path && (
+                    {p.video_path && (
                       <div style={{ fontSize: 10, color: "#3d5a80" }}>
-                        🖼 Imagem: <span style={{ color: "#888", fontFamily: "monospace", fontSize: 9 }}>{p.image_path.split("/").pop()}</span>
+                        🎬 Reel: <span style={{ color: "#888", fontFamily: "monospace", fontSize: 9 }}>{p.video_path.split("/").pop()}</span>
                       </div>
                     )}
                   </div>

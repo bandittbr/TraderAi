@@ -10,6 +10,7 @@ interface ControlsProps {
     token_days_left: number | null;
     post_hours: string | null;
     posts_per_day: number;
+    reels_per_day?: number;
     instagram_account_id: string | null;
   };
   onRefresh: () => void;
@@ -22,8 +23,18 @@ const TOPICS = [
   { key: "news",    label: "📰 Notícia",  color: "#7c3aed" },
 ];
 
+const REEL_TOPICS = [
+  { key: "meme",         label: "😂 Meme",        color: "#d97706" },
+  { key: "noticias",     label: "📰 Notícias",    color: "#2563eb" },
+  { key: "insight",      label: "💡 Insight",     color: "#059669" },
+  { key: "profits",      label: "💰 Profits",     color: "#059669" },
+  { key: "erros",        label: "😅 Erros",       color: "#dc2626" },
+  { key: "aprendizados", label: "📚 Aprendizados", color: "#7c3aed" },
+];
+
 export default function InfluencerControls({ status, onRefresh }: ControlsProps) {
   const [posting, setPosting] = useState<string | null>(null);
+  const [postType, setPostType] = useState<"image" | "reel">("image");
   const [msg, setMsg] = useState("");
   const [renewing, setRenewing] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -39,11 +50,11 @@ export default function InfluencerControls({ status, onRefresh }: ControlsProps)
       const r = await fetch("/api/v1/biel/post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic }),
+        body: JSON.stringify({ topic, post_type: postType }),
       });
       const j = await r.json();
       if (j.status === "published") {
-        setMsg(`✅ Post "${topic}" publicado! IG: ${j.instagram_id}`);
+        setMsg(`✅ ${postType === "reel" ? "Reel" : "Post"} "${topic}" publicado! IG: ${j.instagram_id}`);
         onRefresh();
       } else {
         setMsg(`❌ Erro: ${j.detail || j.error}`);
@@ -116,8 +127,29 @@ export default function InfluencerControls({ status, onRefresh }: ControlsProps)
         <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
           🚀 Forçar Post Manual
         </div>
+        {/* Type toggle */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <button onClick={() => setPostType("image")}
+            style={{
+              fontSize: 11, padding: "5px 14px", borderRadius: 8, cursor: "pointer",
+              background: postType === "image" ? "#1e3a5f" : "#060d1a",
+              color: postType === "image" ? "#60a5fa" : "#3d5a80",
+              border: `1px solid ${postType === "image" ? "#2563eb" : "#141c2e"}`,
+            }}>
+            🖼 Imagem
+          </button>
+          <button onClick={() => setPostType("reel")}
+            style={{
+              fontSize: 11, padding: "5px 14px", borderRadius: 8, cursor: "pointer",
+              background: postType === "reel" ? "#2a1a4a" : "#060d1a",
+              color: postType === "reel" ? "#c084fc" : "#3d5a80",
+              border: `1px solid ${postType === "reel" ? "#8b5cf6" : "#141c2e"}`,
+            }}>
+            🎬 Reel
+          </button>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {TOPICS.map(t => (
+          {(postType === "image" ? TOPICS : REEL_TOPICS).map(t => (
             <button key={t.key}
               onClick={() => forcePost(t.key)}
               disabled={posting !== null}
@@ -156,6 +188,7 @@ export default function InfluencerControls({ status, onRefresh }: ControlsProps)
             { label: "Status",          value: status.configured && status.active ? "Ativo" : "Inativo", color: status.configured && status.active ? "#00ff88" : "#ff4444" },
             { label: "Posts por dia",   value: String(status.posts_per_day),  color: "#60a5fa" },
             { label: "Horários (UTC)",  value: status.post_hours || "—",      color: "#ffd700" },
+            { label: "Reels por dia",   value: status.reels_per_day != null ? String(status.reels_per_day) : "—", color: "#c084fc" },
             { label: "Conta IG",        value: status.instagram_account_id ? status.instagram_account_id.slice(0, 12) + "…" : "Não configurada", color: "#c084fc" },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

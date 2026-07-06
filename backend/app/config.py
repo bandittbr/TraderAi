@@ -30,7 +30,15 @@ class Settings(BaseSettings):
     app_debug: bool = True
 
     # ── Banco de Dados ─────────────────────────────────────────────────────────
+    # Suporta:
+    #   SQLite:    sqlite+aiosqlite:///./data/tradeai.db
+    #   PostgreSQL: postgresql+asyncpg://user:pass@host:5432/dbname
+    # Auto-detect: Railway define DATABASE_URL com PostgreSQL
     database_url: str = "sqlite+aiosqlite:///./data/tradeai.db"
+
+    @property
+    def is_postgres(self) -> bool:
+        return self.database_url.startswith("postgresql")
 
     # ── CORS ───────────────────────────────────────────────────────────────────
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

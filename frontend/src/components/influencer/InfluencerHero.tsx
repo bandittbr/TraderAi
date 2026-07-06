@@ -110,6 +110,18 @@ export default function InfluencerHero({ metrics }: HeroProps) {
       {/* Divider */}
       <div style={{ width: 1, height: 70, background: "#1e3a5f", flexShrink: 0 }} />
 
+      {/* Reels */}
+      {counters.reels_published !== undefined && (
+        <>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Reels</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#c084fc", marginTop: 6 }}>{counters.reels_published}</div>
+            <div style={{ color: "#3d5a80", fontSize: 11, marginTop: 4 }}>publicados</div>
+          </div>
+          <div style={{ width: 1, height: 70, background: "#1e3a5f", flexShrink: 0 }} />
+        </>
+      )}
+
       {/* Token */}
       <div style={{ textAlign: "center" }}>
         <div style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Token IG</div>

@@ -1,7 +1,7 @@
 """
-TradeAI - Gerenciamento do Banco de Dados SQLite
-Utiliza SQLAlchemy assíncrono com aiosqlite para não bloquear o event loop.
-Fase 1: apenas inicialização e verificação de conectividade.
+TradeAI - Gerenciamento do Banco de Dados
+Suporta SQLite (aiosqlite) e PostgreSQL (asyncpg).
+Auto-detect: Railway define DATABASE_URL com PostgreSQL; dev usa SQLite local.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -15,21 +15,27 @@ logger = get_logger(__name__)
 
 
 def _ensure_db_dir() -> None:
-    """Garante que o diretório do banco de dados existe."""
+    """Garante que o diretório do banco de dados existe (apenas SQLite)."""
+    if settings.is_postgres:
+        return
     db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
-    # Remove "./" inicial se presente
     if db_path.startswith("./"):
         db_path = db_path[2:]
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 
-# ── Engine assíncrono ──────────────────────────────────────────────────────────
-_ensure_db_dir()
+# ── Configurações de conexão ──────────────────────────────────────────────────
+_connect_args = {}
+if not settings.is_postgres:
+    _ensure_db_dir()
+    _connect_args = {"check_same_thread": False}
 
+
+# ── Engine assíncrono ──────────────────────────────────────────────────────────
 engine = create_async_engine(
     settings.database_url,
     echo=settings.is_development,      # Loga as queries SQL em modo desenvolvimento
-    connect_args={"check_same_thread": False},
+    connect_args=_connect_args,
 )
 
 # Fábrica de sessões assíncronas
@@ -63,7 +69,7 @@ async def init_db() -> None:
 
 
 async def _run_migrations() -> None:
-    """Aplica migrações SQLite de forma idempotente."""
+    """Aplica migrações de forma idempotente (SQLite ou PostgreSQL)."""
     migrations = [
         # Phase 4+: Futures — adiciona trade_side se não existir
         (
@@ -99,12 +105,20 @@ async def _run_migrations() -> None:
     async with engine.begin() as conn:
         for table, column, sql in migrations:
             try:
-                # Verifica se a coluna já existe (PRAGMA table_info)
-                result = await conn.execute(
-                    text(f"PRAGMA table_info({table})")
-                )
-                cols = [row[1] for row in result.fetchall()]
-                if column not in cols:
+                if settings.is_postgres:
+                    # PostgreSQL: consulta information_schema.columns
+                    result = await conn.execute(
+                        text("SELECT column_name FROM information_schema.columns WHERE table_name = :t AND column_name = :c"),
+                        {"t": table, "c": column},
+                    )
+                    exists = result.fetchone() is not None
+                else:
+                    # SQLite: PRAGMA table_info
+                    result = await conn.execute(text(f"PRAGMA table_info({table})"))
+                    cols = [row[1] for row in result.fetchall()]
+                    exists = column in cols
+
+                if not exists:
                     await conn.execute(text(sql))
                     logger.info(f"[migration] {table}.{column} adicionada.")
             except Exception as exc:

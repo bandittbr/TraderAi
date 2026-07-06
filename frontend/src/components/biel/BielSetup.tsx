@@ -9,6 +9,8 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
     app_secret: "",
     instagram_account_id: "",
     post_hours: "8,12,18,22",
+    reel_hours: "9,21",
+    music_url: "",
   });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
@@ -32,6 +34,9 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
           instagram_account_id:  form.instagram_account_id || undefined,
           post_hours:            form.post_hours,
           posts_per_day:         form.post_hours.split(",").length,
+          reel_hours:            form.reel_hours || undefined,
+          reels_per_day:         form.reel_hours ? form.reel_hours.split(",").length : undefined,
+          music_url:             form.music_url || undefined,
         }),
       });
       const j = await r.json();
@@ -96,7 +101,7 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <label style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase" }}>Horários dos Posts (UTC)</label>
+        <label style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase" }}>Horários dos Posts — Imagens (UTC)</label>
         <input
           value={form.post_hours}
           onChange={e => setForm(f => ({ ...f, post_hours: e.target.value }))}
@@ -107,7 +112,43 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
           }}
         />
         <div style={{ color: "#3d5a80", fontSize: 9 }}>
-          Separados por vírgula. Exemplo: 8,12,18,22 = 4 posts por dia (horário UTC)
+          Separados por vírgula. Exemplo: 8,12,18,22 = 4 imagens por dia (horário UTC)
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <label style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase" }}>
+          Horários dos Reels (UTC) <span style={{ color: "#1e3a5f" }}>(opcional)</span>
+        </label>
+        <input
+          value={form.reel_hours}
+          onChange={e => setForm(f => ({ ...f, reel_hours: e.target.value }))}
+          placeholder="9,21"
+          style={{
+            background: "#060d1a", border: "1px solid #141c2e", borderRadius: 8,
+            color: "#c8d8e8", fontSize: 12, padding: "8px 10px", outline: "none",
+          }}
+        />
+        <div style={{ color: "#3d5a80", fontSize: 9 }}>
+          Separados por vírgula. Exemplo: 9,21 = 2 reels por dia (horário UTC)
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <label style={{ color: "#3d5a80", fontSize: 10, textTransform: "uppercase" }}>
+          URL Música para Reels <span style={{ color: "#1e3a5f" }}>(opcional — fallback: melodia gerada)</span>
+        </label>
+        <input
+          value={form.music_url}
+          onChange={e => setForm(f => ({ ...f, music_url: e.target.value }))}
+          placeholder="https://example.com/music.mp3"
+          style={{
+            background: "#060d1a", border: "1px solid #141c2e", borderRadius: 8,
+            color: "#c8d8e8", fontSize: 12, padding: "8px 10px", outline: "none",
+          }}
+        />
+        <div style={{ color: "#3d5a80", fontSize: 9 }}>
+          URL pública de um arquivo MP3. Se vazio, o Biel gera uma melodia automática em sine wave.
         </div>
       </div>
 

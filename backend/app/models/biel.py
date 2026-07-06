@@ -14,7 +14,7 @@ class BielPost(Base):
 
     id            = Column(Integer, primary_key=True, index=True)
     post_type     = Column(String(20), nullable=False)   # "image" | "reel"
-    caption       = Column(Text, nullable=False)          # Texto gerado pelo Gemini
+    caption       = Column(Text, nullable=False)          # Texto gerado pelo Gemini/Llama
     image_path    = Column(String(500), nullable=True)    # Caminho local da imagem
     video_path    = Column(String(500), nullable=True)    # Caminho local do vídeo
     instagram_id  = Column(String(100), nullable=True)    # ID do post no Instagram
@@ -22,7 +22,8 @@ class BielPost(Base):
     error_msg     = Column(Text, nullable=True)
     regime        = Column(String(20), nullable=True)     # Regime no momento do post
     pnl_snapshot  = Column(Float, nullable=True)          # P&L no momento
-    topic         = Column(String(50), nullable=True)     # "market"|"trade"|"insight"|"news"
+    topic         = Column(String(50), nullable=True)     # Imagens: "market"|"trade"|"insight"|"news"
+    reel_topic    = Column(String(50), nullable=True)     # Reels: "meme"|"noticias"|"insight"|"profits"|"erros"|"aprendizados"
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     published_at  = Column(DateTime(timezone=True), nullable=True)
 
@@ -49,11 +50,14 @@ class BielConfig(Base):
     __tablename__ = "biel_config"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    gemini_api_key      = Column(Text, nullable=False)   # FIXME: criptografar antes de salvar (ver PENTEFINO.md)
+    gemini_api_key      = Column(Text, nullable=False)   # FIXME: criptografar antes de salvar
     posts_per_day       = Column(Integer, default=4)
     post_hours          = Column(String(50), default="8,12,18,22")  # Horários dos posts
+    reels_per_day       = Column(Integer, default=2)       # Quantos reels por dia
+    reel_hours          = Column(String(50), default="9,21")  # Horários dos reels
     persona_name        = Column(String(50), default="Biel")
     is_active           = Column(Boolean, default=True)
     instagram_account_id = Column(String(100), nullable=True)
+    music_url           = Column(String(500), nullable=True)  # URL da música de fundo para reels
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())

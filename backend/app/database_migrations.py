@@ -15,16 +15,15 @@ async def run_phase12_migrations() -> None:
     """
     Fase 12 — Trade Management Engine.
     Adiciona colunas à tabela paper_trades se ainda não existirem.
-    SQLite suporta ALTER TABLE ADD COLUMN; seguro executar múltiplas vezes.
     """
     new_columns = [
         ("break_even_activated",  "INTEGER DEFAULT 0"),
-        ("break_even_timestamp",  "DATETIME"),
+        ("break_even_timestamp",  "TIMESTAMP"),
         ("trailing_stop_active",  "INTEGER DEFAULT 0"),
         ("trailing_stop_price",   "REAL"),
         ("trailing_stop_peak",    "REAL"),
         ("tp1_hit",               "INTEGER DEFAULT 0"),
-        ("tp1_hit_timestamp",     "DATETIME"),
+        ("tp1_hit_timestamp",     "TIMESTAMP"),
         ("tp1_partial_qty",       "REAL"),
         ("tp1_partial_price",     "REAL"),
         ("remaining_quantity",    "REAL"),
@@ -32,10 +31,18 @@ async def run_phase12_migrations() -> None:
         ("exit_score_at_close",   "REAL"),
     ]
 
+    from app.config import settings
+
     async with engine.begin() as conn:
-        # Obter colunas existentes via PRAGMA
-        result = await conn.execute(text("PRAGMA table_info(paper_trades)"))
-        existing = {row[1] for row in result.fetchall()}
+        # Obter colunas existentes
+        if settings.is_postgres:
+            result = await conn.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name = 'paper_trades'")
+            )
+            existing = {row[0] for row in result.fetchall()}
+        else:
+            result = await conn.execute(text("PRAGMA table_info(paper_trades)"))
+            existing = {row[1] for row in result.fetchall()}
 
         added = 0
         for col_name, col_type in new_columns:

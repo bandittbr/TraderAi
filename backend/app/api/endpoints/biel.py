@@ -34,11 +34,15 @@ class SetupRequest(BaseModel):
     app_secret: str
     posts_per_day: int = 4
     post_hours: str = "8,12,18,22"
+    reels_per_day: int = 2
+    reel_hours: str = "9,21"
     instagram_account_id: str | None = None  # se fornecido, pula auto-detecção
+    music_url: str | None = None  # URL de música para reels
 
 
 class PostRequest(BaseModel):
-    topic: str | None = None  # "market" | "trade" | "insight" | "news"
+    topic: str | None = None      # "market" | "trade" | "insight" | "news" | tópico de reel
+    post_type: str | None = None  # "image" | "reel" (auto se None)
 
 
 # ── Imagens estáticas ─────────────────────────────────────────────────────────
@@ -82,6 +86,9 @@ async def setup_biel(data: SetupRequest):
                 gemini_api_key      = data.gemini_api_key,
                 posts_per_day       = data.posts_per_day,
                 post_hours          = data.post_hours,
+                reels_per_day       = data.reels_per_day,
+                reel_hours          = data.reel_hours,
+                music_url           = data.music_url,
                 is_active           = True,
                 instagram_account_id = ig_account_id,
             )
@@ -124,13 +131,17 @@ async def get_status():
             "active": config.is_active if config else False,
             "post_hours": config.post_hours if config else None,
             "posts_per_day": config.posts_per_day if config else 0,
+            "reel_hours": config.reel_hours if config else None,
+            "reels_per_day": config.reels_per_day if config else 0,
             "instagram_account_id": config.instagram_account_id if config else None,
             "token_active": token is not None and token.is_active,
             "token_expires_at": token.expires_at.isoformat() if (token and token.expires_at) else None,
             "recent_posts": [
                 {
                     "id": p.id,
+                    "post_type": p.post_type,
                     "topic": p.topic,
+                    "reel_topic": p.reel_topic,
                     "status": p.status,
                     "instagram_id": p.instagram_id,
                     "caption_preview": (p.caption[:80] + "...") if p.caption and len(p.caption) > 80 else p.caption,
@@ -147,8 +158,8 @@ async def get_status():
 
 @router.post("/post")
 async def force_post(data: PostRequest = PostRequest()):
-    """Força um post manual imediato."""
-    result = await run_post(topic=data.topic)
+    """Força um post manual imediato (imagem ou reel)."""
+    result = await run_post(topic=data.topic, post_type=data.post_type)
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
@@ -213,59 +224,7 @@ async def verify_token():
         return {"valid": False, "error": str(e), "stored_prefix": stored_prefix}
 
 
-@router.get("/token/diagnose")
-async def diagnose_token():
-    """
-    Diagnóstico completo do token — testa /me, debug_token, e proxy env.
-    """
-    import os
-    token = await get_active_token()
-    if not token:
-        return {"error": "Nenhum token no banco"}
 
-    diag = {
-        "token_prefix": token.access_token[:30] + "...",
-        "account_id": token.account_id,
-        "expires_at": token.expires_at.isoformat() if token.expires_at else None,
-        "proxy_env": {
-            "HTTP_PROXY": os.environ.get("HTTP_PROXY"),
-            "HTTPS_PROXY": os.environ.get("HTTPS_PROXY"),
-            "ALL_PROXY": os.environ.get("ALL_PROXY"),
-            "http_proxy": os.environ.get("http_proxy"),
-            "https_proxy": os.environ.get("https_proxy"),
-        },
-    }
-
-    try:
-        # Teste 1: chamada direta com httpx (igual ao fluxo real)
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r1 = await client.get(
-                "https://graph.facebook.com/v19.0/me",
-                params={"access_token": token.access_token, "fields": "id,name"}
-            )
-            diag["test_me"] = {
-                "status": r1.status_code,
-                "body": r1.json(),
-            }
-    except Exception as e:
-        diag["test_me"] = {"error": str(e)}
-
-    try:
-        # Teste 2: debug_token via app_token
-        app_token = f"{token.app_id}|{token.app_secret}"
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r2 = await client.get(
-                "https://graph.facebook.com/v19.0/debug_token",
-                params={"input_token": token.access_token, "access_token": app_token}
-            )
-            diag["test_debug"] = {
-                "status": r2.status_code,
-                "body": r2.json(),
-            }
-    except Exception as e:
-        diag["test_debug"] = {"error": str(e)}
-
-    return diag
 
 
 # ── Atualizar apenas o token (sem refazer setup completo) ─────────────────────
@@ -352,11 +311,14 @@ async def list_posts(limit: int = 50):
         return [
             {
                 "id": p.id,
+                "post_type": p.post_type,
                 "topic": p.topic,
+                "reel_topic": p.reel_topic,
                 "status": p.status,
                 "instagram_id": p.instagram_id,
                 "caption": p.caption,
                 "image_path": p.image_path,
+                "video_path": p.video_path,
                 "regime": p.regime,
                 "pnl_snapshot": p.pnl_snapshot,
                 "error": p.error_msg,
@@ -442,13 +404,30 @@ async def get_metrics():
             )
         )
 
-        # Breakdown por tópico
+        # Breakdown por tópico (imagens)
         topics_q = await session.execute(
             select(BielPost.topic, func.count(BielPost.id))
-            .where(BielPost.status == "published")
+            .where(BielPost.status == "published", BielPost.post_type == "image")
             .group_by(BielPost.topic)
         )
         topics = {row[0]: row[1] for row in topics_q.all()}
+
+        # Breakdown por tópico de reels
+        reel_topics_q = await session.execute(
+            select(BielPost.reel_topic, func.count(BielPost.id))
+            .where(BielPost.status == "published", BielPost.post_type == "reel")
+            .group_by(BielPost.reel_topic)
+        )
+        reel_topics = {row[0]: row[1] for row in reel_topics_q.all()}
+
+        # Contagem de reels publicados
+        reels_published_q = await session.execute(
+            select(func.count(BielPost.id)).where(
+                BielPost.status == "published",
+                BielPost.post_type == "reel",
+            )
+        )
+        reels_published = reels_published_q.scalar()
 
         # Último post publicado
         last_q = await session.execute(
@@ -535,6 +514,8 @@ async def get_metrics():
                 "instagram_account_id": config.instagram_account_id if config else None,
                 "posts_per_day": config.posts_per_day if config else 0,
                 "post_hours": config.post_hours if config else None,
+                "reels_per_day": config.reels_per_day if config else 0,
+                "reel_hours": config.reel_hours if config else None,
                 "persona_name": config.persona_name if config else "Biel",
             },
             "counters": {
@@ -546,8 +527,10 @@ async def get_metrics():
                 "month": month_q.scalar(),
                 "success_rate": success_rate,
                 "days_active": days_active,
+                "reels_published": reels_published,
             },
             "topics": topics,
+            "reel_topics": reel_topics,
             "schedule": {
                 "slots": schedule_slots,
                 "next_post_in_minutes": next_post_in_minutes,

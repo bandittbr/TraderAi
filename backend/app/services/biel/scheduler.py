@@ -1,6 +1,6 @@
 """
 Biel — Scheduler
-Agenda posts automáticos nos horários configurados (padrão: 8, 12, 18, 22).
+Agenda posts automáticos: imagens nos horários configurados, reels em horários separados.
 Roda como background task junto com o servidor FastAPI.
 """
 
@@ -14,19 +14,26 @@ from app.logger import get_logger
 logger = get_logger(__name__)
 
 
-async def _should_post_now(config, now: datetime) -> bool:
-    """Verifica se a hora atual é um dos horários configurados."""
+async def _should_post_now(config, now: datetime, post_type: str) -> tuple[bool, str | None]:
+    """
+    Verifica se a hora atual corresponde a um horário de post.
+    Retorna (deve_postar, tópico).
+    """
     try:
-        hours = [int(h.strip()) for h in config.post_hours.split(",")]
+        if post_type == "reel":
+            hours = [int(h.strip()) for h in (config.reel_hours or "9,21").split(",")]
+        else:
+            hours = [int(h.strip()) for h in (config.post_hours or "8,12,18,22").split(",")]
     except Exception:
-        hours = [8, 12, 18, 22]
+        hours = [8, 12, 18, 22] if post_type == "image" else [9, 21]
+
     return now.hour in hours
 
 
 async def biel_scheduler_loop():
     """
     Loop principal do Biel — verifica a cada minuto se é hora de postar.
-    Só posta uma vez por hora (controla via set de horas já postadas).
+    Posta imagens e reels em horários distintos.
     """
     logger.info("[biel/scheduler] Iniciado")
     posted_hours: set = set()
@@ -36,7 +43,7 @@ async def biel_scheduler_loop():
         try:
             now = datetime.now(timezone.utc)
 
-            # Renovação diária do token (roda uma vez por dia)
+            # Renovação diária do token
             if now.day != last_token_check_day:
                 await check_and_renew()
                 last_token_check_day = now.day
@@ -51,18 +58,41 @@ async def biel_scheduler_loop():
             # Verificar se é hora de postar
             config = await _get_config()
             if config and config.is_active:
-                hour_key = f"{day_key}-{now.hour}"
-                if hour_key not in posted_hours:
-                    if await _should_post_now(config, now):
-                        logger.info(f"[biel/scheduler] Hora de postar! {now.strftime('%H:%M UTC')}")
-                        result = await run_post()
-                        posted_hours.add(hour_key)
-                        logger.info(f"[biel/scheduler] Resultado: {result.get('status')}")
+                hour_key_image = f"{day_key}-image-{now.hour}"
+                hour_key_reel = f"{day_key}-reel-{now.hour}"
+
+                # Imagem?
+                if hour_key_image not in posted_hours:
+                    if await _should_post_now(config, now, "image"):
+                        logger.info(
+                            f"[biel/scheduler] Hora de postar IMAGEM! "
+                            f"{now.strftime('%H:%M UTC')}"
+                        )
+                        result = await run_post(post_type="image")
+                        posted_hours.add(hour_key_image)
+                        logger.info(
+                            f"[biel/scheduler] Resultado imagem: "
+                            f"{result.get('status')}"
+                        )
+
+                # Reel?
+                if hour_key_reel not in posted_hours:
+                    if await _should_post_now(config, now, "reel"):
+                        logger.info(
+                            f"[biel/scheduler] Hora de postar REEL! "
+                            f"{now.strftime('%H:%M UTC')}"
+                        )
+                        result = await run_post(post_type="reel")
+                        posted_hours.add(hour_key_reel)
+                        logger.info(
+                            f"[biel/scheduler] Resultado reel: "
+                            f"{result.get('status')}"
+                        )
 
         except Exception as e:
             logger.error(f"[biel/scheduler] Erro no loop: {e}")
 
-        await asyncio.sleep(60)  # Verifica a cada minuto
+        await asyncio.sleep(60)
 
 
 async def start_biel_scheduler() -> list:

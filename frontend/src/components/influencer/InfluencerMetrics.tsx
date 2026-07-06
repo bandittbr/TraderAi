@@ -10,8 +10,10 @@ interface MetricsProps {
     month: number;
     success_rate: number;
     days_active: number;
+    reels_published?: number;
   };
   topics: Record<string, number>;
+  reel_topics?: Record<string, number>;
   daily: { date: string; count: number }[];
 }
 
@@ -22,7 +24,16 @@ const TOPIC_META: Record<string, { label: string; color: string; emoji: string }
   news:    { label: "Notícia",  color: "#c084fc", emoji: "📰" },
 };
 
-export default function InfluencerMetrics({ counters, topics, daily }: MetricsProps) {
+const REEL_TOPIC_META: Record<string, { label: string; color: string; emoji: string }> = {
+  meme:         { label: "Meme",        color: "#ffd700", emoji: "😂" },
+  noticias:     { label: "Notícias",    color: "#60a5fa", emoji: "📰" },
+  insight:      { label: "Insight",     color: "#00ff88", emoji: "💡" },
+  profits:      { label: "Profits",     color: "#00ff88", emoji: "💰" },
+  erros:        { label: "Erros",       color: "#ff4444", emoji: "😅" },
+  aprendizados: { label: "Aprendizados", color: "#c084fc", emoji: "📚" },
+};
+
+export default function InfluencerMetrics({ counters, topics, reel_topics, daily }: MetricsProps) {
   const maxDaily = Math.max(...daily.map(d => d.count), 1);
 
   return (
@@ -74,10 +85,10 @@ export default function InfluencerMetrics({ counters, topics, daily }: MetricsPr
         </div>
       </div>
 
-      {/* Breakdown por tópico */}
+      {/* Breakdown por tópico — Imagens */}
       <div style={{ background: "#0d1525", border: "1px solid #141c2e", borderRadius: 12, padding: 20 }}>
         <div style={{ color: "#60a5fa", fontWeight: 700, fontSize: 13, marginBottom: 14 }}>
-          🎯 Posts por Tópico
+          🎯 Posts por Tópico (Imagens)
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {["market", "trade", "insight", "news"].map(t => {
@@ -110,6 +121,44 @@ export default function InfluencerMetrics({ counters, topics, daily }: MetricsPr
           })}
         </div>
       </div>
+
+      {/* Breakdown por tópico — Reels */}
+      {reel_topics && Object.keys(reel_topics).length > 0 && (
+        <div style={{ background: "#0d1525", border: "1px solid #141c2e", borderRadius: 12, padding: 20 }}>
+          <div style={{ color: "#c084fc", fontWeight: 700, fontSize: 13, marginBottom: 14 }}>
+            🎬 Reels por Tópico
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {Object.entries(REEL_TOPIC_META).map(([key, meta]) => {
+              const count = reel_topics[key] || 0;
+              const total = counters.reels_published || 1;
+              const pct = Math.round(count / total * 100);
+              return (
+                <div key={key} style={{
+                  background: "#060d1a", borderRadius: 10, padding: "12px 14px",
+                  border: `1px solid ${meta.color}22`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 16 }}>{meta.emoji}</span>
+                      <span style={{ color: meta.color, fontWeight: 700, fontSize: 13 }}>{meta.label}</span>
+                    </div>
+                    <span style={{ color: "#c8d8e8", fontWeight: 800, fontSize: 18 }}>{count}</span>
+                  </div>
+                  <div style={{ marginTop: 10, background: "#141c2e", borderRadius: 4, height: 4 }}>
+                    <div style={{
+                      width: `${pct}%`, height: "100%",
+                      background: meta.color, borderRadius: 4,
+                      transition: "width 0.5s",
+                    }} />
+                  </div>
+                  <div style={{ color: "#3d5a80", fontSize: 10, marginTop: 4 }}>{pct}% dos reels</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

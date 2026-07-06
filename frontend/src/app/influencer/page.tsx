@@ -4,6 +4,7 @@ import InfluencerHero     from "@/components/influencer/InfluencerHero";
 import InfluencerSchedule from "@/components/influencer/InfluencerSchedule";
 import InfluencerMetrics  from "@/components/influencer/InfluencerMetrics";
 import InfluencerFeed     from "@/components/influencer/InfluencerFeed";
+import InfluencerReelsFeed from "@/components/influencer/InfluencerReelsFeed";
 import InfluencerControls from "@/components/influencer/InfluencerControls";
 import BielSetup          from "@/components/biel/BielSetup";
 
@@ -12,7 +13,7 @@ export default function InfluencerPage() {
   const [posts, setPosts]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [tab, setTab] = useState<"overview" | "feed" | "setup">("overview");
+  const [tab, setTab] = useState<"overview" | "feed" | "reels" | "setup">("overview");
 
   const refresh = useCallback(async () => {
     try {
@@ -39,6 +40,7 @@ export default function InfluencerPage() {
   const tabs = [
     { key: "overview", label: "📊 Overview" },
     { key: "feed",     label: "📋 Feed de Posts" },
+    { key: "reels",    label: "🎬 Reels" },
     { key: "setup",    label: "🔧 Configurar" },
   ] as const;
 
@@ -113,6 +115,7 @@ export default function InfluencerPage() {
             <InfluencerMetrics
               counters={metrics.counters}
               topics={metrics.topics || {}}
+              reel_topics={metrics.reel_topics || {}}
               daily={metrics.daily || []}
             />
 
@@ -125,11 +128,19 @@ export default function InfluencerPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                     <span style={{ fontSize: 16 }}>
-                      {metrics.last_post.topic === "market" ? "📊" : metrics.last_post.topic === "trade" ? "📈" : metrics.last_post.topic === "insight" ? "💡" : "📰"}
+                      {metrics.last_post.post_type === "reel" ? "🎬"
+                        : metrics.last_post.topic === "market" ? "📊"
+                        : metrics.last_post.topic === "trade" ? "📈"
+                        : metrics.last_post.topic === "insight" ? "💡" : "📰"}
                     </span>
                     <span style={{ color: "#c8d8e8", fontWeight: 700, fontSize: 13, textTransform: "capitalize" }}>
-                      {metrics.last_post.topic}
+                      {metrics.last_post.reel_topic || metrics.last_post.topic}
                     </span>
+                    {metrics.last_post.post_type === "reel" && (
+                      <span style={{ fontSize: 9, color: "#c084fc", background: "#2a1a4a", border: "1px solid #8b5cf6", padding: "1px 6px", borderRadius: 6 }}>
+                        REEL
+                      </span>
+                    )}
                     {metrics.last_post.regime && (
                       <span style={{ fontSize: 10, color: "#3d5a80", background: "#141c2e", padding: "1px 8px", borderRadius: 6 }}>
                         {metrics.last_post.regime}
@@ -172,6 +183,11 @@ export default function InfluencerPage() {
       {/* Tab: Feed */}
       {tab === "feed" && (
         <InfluencerFeed posts={posts} />
+      )}
+
+      {/* Tab: Reels */}
+      {tab === "reels" && (
+        <InfluencerReelsFeed posts={posts} />
       )}
 
       {/* Tab: Setup */}

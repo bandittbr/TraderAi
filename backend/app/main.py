@@ -96,11 +96,15 @@ app.add_middleware(
 )
 
 
-# ── Static files (imagens do Biel) ────────────────────────────────────────────
+# ── Static files (imagens e reels do Biel) ────────────────────────────────────
 
 _BIEL_IMAGES = Path("data/biel_images")
 _BIEL_IMAGES.mkdir(parents=True, exist_ok=True)
 app.mount("/biel/images", StaticFiles(directory=str(_BIEL_IMAGES)), name="biel_images")
+
+_BIEL_REELS = Path("data/biel_reels")
+_BIEL_REELS.mkdir(parents=True, exist_ok=True)
+app.mount("/biel/reels", StaticFiles(directory=str(_BIEL_REELS)), name="biel_reels")
 
 # ── Rotas ──────────────────────────────────────────────────────────────────────
 
