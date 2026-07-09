@@ -77,6 +77,77 @@ class TradeMetrics:
     current_balance: float
 
 
+# ── V7: Paper Risk Manager (Circuit Breaker por Regime) ────────────────────────
+# Mesma lógica do scalper: 3 perdas consecutivas → sizing 50%, 5 → pausa
+PAPER_REGIMES = ("BULL", "BEAR", "SIDEWAYS", "HIGH_VOLATILITY", "UNKNOWN")
+PAPER_REGIME_REDUCE_AFTER  = 3
+PAPER_REGIME_PAUSE_AFTER   = 5
+PAPER_REGIME_REDUCE_FACTOR = 0.5
+
+
+class PaperRiskManager:
+    """
+    V7: Circuit Breaker por regime para Paper Trading.
+    Rastreia perdas consecutivas por regime em memória.
+    Reset automático no próximo dia UTC.
+    """
+    _today_str: str = ""
+    _regime_losses: dict[str, int] = None
+
+    def __init__(self):
+        self._reset()
+
+    def _reset(self) -> None:
+        from datetime import date
+        self._today_str = date.today().isoformat()
+        self._regime_losses = {r: 0 for r in PAPER_REGIMES}
+
+    def _check_day(self) -> None:
+        from datetime import date
+        today = date.today().isoformat()
+        if today != self._today_str:
+            self._reset()
+
+    def regime_sizing_multiplier(self, regime: str) -> float:
+        """1.0 normal | 0.5 após 3 perdas | 0.0 se pausado."""
+        self._check_day()
+        losses = self._regime_losses.get(regime, 0)
+        if losses >= PAPER_REGIME_PAUSE_AFTER:
+            return 0.0
+        if losses >= PAPER_REGIME_REDUCE_AFTER:
+            return PAPER_REGIME_REDUCE_FACTOR
+        return 1.0
+
+    def is_regime_paused(self, regime: str) -> bool:
+        self._check_day()
+        return self._regime_losses.get(regime, 0) >= PAPER_REGIME_PAUSE_AFTER
+
+    def record_trade(self, won: bool, regime: str = "UNKNOWN") -> None:
+        """
+        Registra resultado e atualiza contador do regime.
+        Vitória reseta o contador do regime.
+        """
+        self._check_day()
+        if regime not in self._regime_losses:
+            regime = "UNKNOWN"
+        if won:
+            was_paused = self._regime_losses[regime] >= PAPER_REGIME_PAUSE_AFTER
+            self._regime_losses[regime] = 0
+            if was_paused:
+                logger.info(f"[PaperRisk] Regime {regime} reativado após vitória.")
+        else:
+            self._regime_losses[regime] += 1
+            los = self._regime_losses[regime]
+            if los == PAPER_REGIME_REDUCE_AFTER:
+                logger.info(f"[PaperRisk] Regime {regime}: {los} consecutivas → sizing 50%")
+            if los >= PAPER_REGIME_PAUSE_AFTER:
+                logger.info(f"[PaperRisk] Regime {regime}: {los} consecutivas → PAUSADO")
+
+
+# Singleton do risk manager
+paper_risk = PaperRiskManager()
+
+
 # ── Trade Engine ──────────────────────────────────────────────────────────────
 
 class TradeEngine:
@@ -137,7 +208,15 @@ class TradeEngine:
                         TradeEngine._signals_rejected_existing_trade += 1
                     await self._maybe_close_trade(session, open_trade, sig)
                 elif self._should_open(sig):
-                    await self._open_trade(session, sig)
+                    # V7: verifica circuit breaker por regime
+                    regime_label = self._resolve_regime_label(sig)
+                    if paper_risk.is_regime_paused(regime_label):
+                        logger.info(
+                            f"[TradeEngine] {sig.symbol} {sig.signal} ignorado — "
+                            f"regime {regime_label} PAUSADO"
+                        )
+                    else:
+                        await self._open_trade(session, sig)
                 else:
                     # NEUTRAL — sem ação
                     pass
@@ -156,6 +235,16 @@ class TradeEngine:
         """
         return sig.signal in ("BUY", "SELL")
 
+    def _resolve_regime_label(self, sig: SignalInput) -> str:
+        """Extrai label do regime do sinal."""
+        regime_raw = getattr(sig, 'regime', None)
+        if regime_raw is None:
+            return "UNKNOWN"
+        regime_obj = getattr(regime_raw, 'regime', regime_raw)
+        if hasattr(regime_obj, 'value'):
+            return regime_obj.value
+        return str(regime_obj)
+
     def _get_side(self, sig: SignalInput) -> str:
         """BUY -> LONG, SELL -> SHORT."""
         return TradeSide.LONG.value if sig.signal == "BUY" else TradeSide.SHORT.value
@@ -164,9 +253,11 @@ class TradeEngine:
         """Abre novo trade LONG ou SHORT."""
         side = self._get_side(sig)
 
-        # V7: quantidade escala com confiança (50% → 50% do risco, 100% → 100%)
+        # V7: quantidade escala com confiança + circuit breaker por regime
         confidence_scale = max(0.25, min(1.0, (sig.confidence or 50) / 100))
-        risk_effective   = settings.paper_risk_per_trade * confidence_scale
+        regime_label     = self._resolve_regime_label(sig)
+        regime_scale     = paper_risk.regime_sizing_multiplier(regime_label)
+        risk_effective   = settings.paper_risk_per_trade * confidence_scale * regime_scale
         quantity = round(risk_effective / sig.price, 8)
 
         trade = PaperTrade(
@@ -206,17 +297,20 @@ class TradeEngine:
             smc        = sig.smc,
         )
         if close_reason:
+            regime_label = self._resolve_regime_label(sig)
             await self._close_trade(
-                session, trade, sig.price, close_reason, exit_score=exit_score
+                session, trade, sig.price, close_reason,
+                exit_score=exit_score, regime_label=regime_label,
             )
 
     async def _close_trade(
         self,
         session,
-        trade:      PaperTrade,
-        exit_price: float,
-        reason:     str,
-        exit_score: Optional[float] = None,
+        trade:       PaperTrade,
+        exit_price:  float,
+        reason:      str,
+        exit_score:  Optional[float] = None,
+        regime_label: str = "UNKNOWN",
     ) -> None:
         """Fecha o trade, calcula PnL (LONG ou SHORT) e atualiza saldo."""
         side  = trade.trade_side
@@ -251,6 +345,9 @@ class TradeEngine:
             f"[TradeEngine] FECHADO {trade.symbol} {side} @ {exit_price:.4f} "
             f"pnl={pnl:+.6f} ({pnl_pct:+.2f}%) motivo={reason} [{outcome}]"
         )
+
+        # V7: registra resultado no circuit breaker por regime
+        paper_risk.record_trade(won=(pnl >= 0), regime=regime_label)
 
         # Resolve sinal correspondente no signal_history (Phase 6)
         try:

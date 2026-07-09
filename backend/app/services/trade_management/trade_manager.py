@@ -71,7 +71,13 @@ class TradeManager:
         entry  = trade.entry_price
         side   = trade.trade_side
 
-        sl_pct = settings.paper_stop_loss_percent / 100
+        # V7: SL adaptativo por volatilidade (ATR do regime)
+        paper_sl_pct  = settings.paper_stop_loss_percent / 100
+        regime_atr    = getattr(regime, 'atr_pct', None) if regime else None
+        if regime_atr and regime_atr > 0:
+            sl_pct = max(paper_sl_pct, regime_atr / 100 * 1.5)  # ATR × 1.5, mínimo 2%
+        else:
+            sl_pct = paper_sl_pct
 
         # ── 1. TIME STOP ──────────────────────────────────────────────────────
         opened_at = trade.opened_at
