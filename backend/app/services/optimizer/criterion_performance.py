@@ -199,33 +199,60 @@ class CriterionPerformanceEngine:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _pnl(r) -> float:
+    """Retorna net_pnl_pct se disponível (V7.11 fees), senão pnl_pct bruto."""
+    if hasattr(r, "net_pnl_pct") and r.net_pnl_pct is not None:
+        return r.net_pnl_pct
+    return r.pnl_pct or 0.0
+
+
 def _compute_metrics(rows: list) -> dict:
-    """Calcula win_rate, profit_factor, expectância, sharpe, drawdown de uma lista de sinais."""
+    """
+    Calcula win_rate, profit_factor, expectância, sharpe, drawdown.
+    
+    Usa net_pnl_pct (fee-ajustado, V7.11) quando disponível,
+    com fallback para pnl_pct bruto.
+    Inclui métricas net (após taxas) separadas.
+    """
     resolved = [r for r in rows if r.outcome in (SignalOutcome.WIN, SignalOutcome.LOSS) and r.pnl_pct is not None]
     if not resolved:
         return {
             "resolved": 0, "wins": 0, "losses": 0,
             "win_rate": 0.0, "profit_factor": 0.0, "expectancy": 0.0,
             "sharpe": 0.0, "max_drawdown": 0.0, "avg_win_pct": 0.0, "avg_loss_pct": 0.0,
+            "net_win_rate": 0.0, "net_profit_factor": 0.0, "net_expectancy": 0.0,
         }
 
     wins   = [r for r in resolved if r.outcome == SignalOutcome.WIN]
     losses = [r for r in resolved if r.outcome == SignalOutcome.LOSS]
     n = len(resolved)
 
+    # ── Gross (classificação binária original) ──
     win_rate = len(wins) / n * 100.0
-
-    gross_profit = sum(r.pnl_pct for r in wins)
-    gross_loss   = abs(sum(r.pnl_pct for r in losses)) if losses else 0.0
+    gross_profit = sum(_pnl(r) for r in wins)
+    gross_loss   = abs(sum(_pnl(r) for r in losses)) if losses else 0.0
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else (10.0 if gross_profit > 0 else 0.0)
-
     avg_win  = gross_profit / len(wins) if wins else 0.0
     avg_loss = gross_loss / len(losses) if losses else 0.0
     lr = 1.0 - (win_rate / 100.0)
     expectancy = (win_rate / 100.0) * avg_win - lr * avg_loss
 
+    # ── Net (reclassificado após descontar taxas) ──
+    net_wins   = [r for r in resolved if _pnl(r) > 0]
+    net_losses = [r for r in resolved if _pnl(r) <= 0]
+    n_net_win = len(net_wins)
+    n_net_loss = len(net_losses)
+    net_win_rate = n_net_win / n * 100.0 if n else 0.0
+    net_gross_profit = sum(_pnl(r) for r in net_wins)
+    net_gross_loss   = abs(sum(_pnl(r) for r in net_losses)) if net_losses else 0.0
+    net_pf = net_gross_profit / net_gross_loss if net_gross_loss > 0 else (10.0 if net_gross_profit > 0 else 0.0)
+    net_avg_win  = net_gross_profit / n_net_win if n_net_win else 0.0
+    net_avg_loss = net_gross_loss / n_net_loss if n_net_loss else 0.0
+    net_lr = 1.0 - (net_win_rate / 100.0)
+    net_exp = (net_win_rate / 100.0) * net_avg_win - net_lr * net_avg_loss
+
     # Sharpe (anualizado assumindo 1 sinal/hora)
-    pnls = [r.pnl_pct for r in resolved]
+    pnls = [_pnl(r) for r in resolved]
     mean_pnl = sum(pnls) / n
     if n > 1:
         variance = sum((p - mean_pnl) ** 2 for p in pnls) / (n - 1)
@@ -243,6 +270,9 @@ def _compute_metrics(rows: list) -> dict:
         "expectancy": round(expectancy, 4), "sharpe": round(sharpe, 3),
         "max_drawdown": round(max_dd, 4), "avg_win_pct": round(avg_win, 4),
         "avg_loss_pct": round(avg_loss, 4),
+        # Net (fee-ajustado)
+        "net_win_rate": round(net_win_rate, 2), "net_profit_factor": round(net_pf, 3),
+        "net_expectancy": round(net_exp, 4),
     }
 
 

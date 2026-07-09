@@ -55,12 +55,21 @@ async def get_scalper_stats(days: int = 30) -> dict:
             "by_reason":       {},
         }
 
+    # ── Gross (PnL bruto, usado historicamente) ──
     wins   = [t for t in trades if (t.pnl or 0) > 0]
     losses = [t for t in trades if (t.pnl or 0) <= 0]
 
     gross_profit = sum(t.pnl for t in wins)   if wins   else 0.0
     gross_loss   = abs(sum(t.pnl for t in losses)) if losses else 0.0
     pf           = round(gross_profit / gross_loss, 3) if gross_loss > 0 else 0.0
+
+    # ── Net (fee-ajustado, V7.11) ──
+    _use_net = lambda t: (t.net_pnl_pct if t.net_pnl_pct is not None else t.pnl_pct or 0)
+    net_wins   = [t for t in trades if _use_net(t) > 0]
+    net_losses = [t for t in trades if _use_net(t) <= 0]
+    net_gp = sum(_use_net(t) for t in net_wins)
+    net_gl = abs(sum(_use_net(t) for t in net_losses)) if net_losses else 0.0
+    net_pf = round(net_gp / net_gl, 3) if net_gl > 0 else 0.0
 
     # By side
     by_side = {}
@@ -116,6 +125,10 @@ async def get_scalper_stats(days: int = 30) -> dict:
         "avg_loss_pct":     round(sum(t.pnl_pct or 0 for t in losses) / len(losses) if losses else 0, 3),
         "max_win_pct":      round(max((t.pnl_pct or 0) for t in wins)   if wins   else 0, 3),
         "max_loss_pct":     round(min((t.pnl_pct or 0) for t in losses) if losses else 0, 3),
+        # V7.11 — Net (fee-ajustado)
+        "net_win_rate":     round(len(net_wins) / len(trades) * 100, 1),
+        "net_profit_factor": net_pf,
+        "total_net_pnl_pct": round(sum(_use_net(t) for t in trades), 4),
         "avg_duration_min": round(sum(durations) / len(durations) if durations else 0, 1),
         "balance":          round(acc.balance if acc else 10_000.0, 2),
         "initial_balance":  round(acc.initial_balance if acc else 10_000.0, 2),

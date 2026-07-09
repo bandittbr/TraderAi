@@ -73,6 +73,9 @@ class ScalperTrade(Base):
 
     pnl:         Mapped[float | None] = mapped_column(Float, nullable=True)
     pnl_pct:     Mapped[float | None] = mapped_column(Float, nullable=True)
+    # V7.11 — Fee modeling
+    fee_cost_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    net_pnl_pct:  Mapped[float | None] = mapped_column(Float, nullable=True)
     status:      Mapped[str]          = mapped_column(String(10), default="OPEN")
     close_reason: Mapped[str | None]  = mapped_column(String(30), nullable=True)
 

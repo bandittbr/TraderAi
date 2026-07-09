@@ -96,6 +96,9 @@ class PaperTrade(Base):
     # Resultado financeiro (preenchido ao fechar)
     pnl:         Mapped[float | None] = mapped_column(Float, nullable=True)
     pnl_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # V7.11 — Fee modeling
+    fee_cost_pct:  Mapped[float | None] = mapped_column(Float, nullable=True)
+    net_pnl_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Motivo de fechamento
     close_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)

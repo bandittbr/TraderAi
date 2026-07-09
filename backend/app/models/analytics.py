@@ -106,6 +106,12 @@ class SignalHistory(Base):
     weighted_score  = Column(Float, nullable=True)    # score com pesos adaptativos (V6)
     weights_version = Column(Integer, nullable=True, default=0)
 
+    # ── V7 — Métricas de qualidade do sinal (7.9, 7.11) ──
+    module_scores_json  = Column(Text, nullable=True)   # {"technical":83.3,"structural":33.3,"smc":50.0}
+    threshold_distance  = Column(Float, nullable=True)  # critérios acima do mínimo do regime
+    fee_cost_pct        = Column(Float, nullable=True)  # custo estimado de taxa + slippage (7.11)
+    net_pnl_pct         = Column(Float, nullable=True)  # pnl_pct - fee_cost_pct (7.11)
+
     # ── Resultado (preenchido quando resolvido) ──
     outcome            = Column(Enum(SignalOutcome), nullable=False, default=SignalOutcome.OPEN)
     entry_price        = Column(Float, nullable=True)

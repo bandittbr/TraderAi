@@ -1,11 +1,13 @@
 """
-Signal Tracker — Phase 6
+Signal Tracker — Phase 8 V7
 
 Responsabilidades:
-  1. record_signal()  — grava todo sinal emitido no banco (outcome=OPEN)
-  2. resolve_signal() — atualiza outcome WIN/LOSS quando posição fecha
-  3. resolve_timeout() — marca MISSED sinais OPEN com mais de MAX_OPEN_HOURS
-  4. get_open_signals() — retorna sinais OPEN para monitorar preço
+   1. record_signal()  — grava todo sinal emitido no banco (outcome=OPEN)
+   2. resolve_signal() — atualiza outcome WIN/LOSS quando posição fecha,
+                          com fee/slippage modeling (7.11)
+   3. resolve_timeout() — marca MISSED sinais OPEN com mais de MAX_OPEN_HOURS
+   4. get_open_signals() — retorna sinais OPEN para monitorar preço
+   5. compute_module_scores() — métricas de qualidade do sinal (7.9)
 """
 from __future__ import annotations
 
@@ -22,11 +24,27 @@ from app.models.analytics import (
     SignalHistory, SignalDirection, SignalOutcome, MarketRegimeType,
 )
 from app.services.signal_analytics.regime_classifier import RegimeResult
+from app.services.optimizer.criterion_performance import CRITERION_CANONICAL
 
 logger = logging.getLogger(__name__)
 
 # Sinal OPEN por mais de N horas é marcado MISSED
 MAX_OPEN_HOURS = 48
+
+# ── Módulos de critérios (V7 — 7.9) ──────────────────────────────────
+# Agrupa os canônicos em módulos de alto nível
+CRITERION_MODULES: dict[str, list[str]] = {
+    "technical":  ["ema_cross", "ema_macro", "ema_price", "macd_trend", "macd_signal", "rsi"],
+    "structural": ["structure", "bos", "sr_zone"],
+    "smc":        ["sweep", "fvg", "hvn_lvn", "liquidity"],
+}
+
+# ── Fee & slippage config (V7 — 7.11) ────────────────────────────────
+FEE_MAKER_PCT    = 0.04   # 0.04% por perna (Binance VIP)
+FEE_TAKER_PCT    = 0.06   # 0.06% por perna
+SLIPPAGE_PCT     = 0.02   # 0.02% slippage estimado médio
+TOTAL_COST_PER_LEG = FEE_MAKER_PCT + SLIPPAGE_PCT  # entrada
+TOTAL_COST_PER_ROUND = TOTAL_COST_PER_LEG * 2       # entrada + saída
 
 
 # ─────────────────────────────────────────────
@@ -93,6 +111,15 @@ class SignalTracker:
             if trade_side is None:
                 trade_side = "LONG" if signal.upper() != "SELL" else "SHORT"
 
+            # ── V7.9 — Métricas de qualidade do sinal ──────────────────
+            module_scores_json_str, _ = compute_module_scores(criteria_met)
+
+            regime_str = regime.regime.name if regime and regime.regime else "UNKNOWN"
+            threshold_dist = compute_threshold_distance(
+                criteria_met, signal, regime_str,
+            ) if criteria_met and signal != "NEUTRAL" else None
+
+            # ── Registro ────────────────────────────────────────────────
             record = SignalHistory(
                 symbol             = symbol,
                 timeframe          = timeframe,
@@ -135,6 +162,9 @@ class SignalTracker:
                 raw_score         = raw_score,
                 weighted_score    = weighted_score,
                 weights_version   = weights_version,
+                # V7 — Qualidade do sinal
+                module_scores_json = module_scores_json_str,
+                threshold_distance  = threshold_dist,
                 # Resultado inicial
                 outcome            = SignalOutcome.OPEN,
                 emitted_at         = datetime.utcnow(),
@@ -175,6 +205,10 @@ class SignalTracker:
             pnl_pct = ((exit_price - entry_price) / entry_price) * 100.0
         outcome = SignalOutcome.WIN if pnl_pct > 0 else SignalOutcome.LOSS
 
+        # ── V7.11 — Fee & slippage modeling ─────────────────────────
+        fee_pct = round(TOTAL_COST_PER_ROUND, 4)
+        net_pnl = round(pnl_pct - fee_pct, 4)
+
         try:
             async with AsyncSessionLocal() as db:
                 await db.execute(
@@ -185,6 +219,8 @@ class SignalTracker:
                         entry_price        = round(entry_price, 8),
                         exit_price         = round(exit_price, 8),
                         pnl_pct            = round(pnl_pct, 4),
+                        fee_cost_pct       = fee_pct,
+                        net_pnl_pct        = net_pnl,
                         max_favorable_pct  = max_fav_pct,
                         max_adverse_pct    = max_adv_pct,
                         trade_duration_min = duration_min,
@@ -328,6 +364,64 @@ def _build_ema_alignment(indicator: Any) -> str:
     }
     sorted_emas = sorted(emas.items(), key=lambda x: x[1], reverse=True)
     return ">".join(label for label, _ in sorted_emas)
+
+
+# ─────────────────────────────────────────────
+# V7.9 — Métricas de qualidade do sinal
+# ─────────────────────────────────────────────
+
+def compute_module_scores(
+    criteria_met: Optional[list[str]],
+) -> tuple[Optional[str], Optional[float]]:
+    """
+    A partir da lista de critérios atendidos, calcula:
+
+    - module_scores_json: % de critérios atendidos por módulo
+      Ex: ``{"technical": 83.3, "structural": 33.3, "smc": 50.0}``
+
+    Retorna (module_scores_json_str, threshold_distance_placeholder).
+    threshold_distance é preenchido em record_signal com o regime.
+    """
+    if not criteria_met:
+        return None, None
+
+    # Mapeia cada critério → canônico → módulo
+    canonicals_met: set[str] = set()
+    for c in criteria_met:
+        can = CRITERION_CANONICAL.get(c, c)
+        canonicals_met.add(can)
+
+    # Conta quantos canônicos diferentes foram atendidos em cada módulo
+    module_scores: dict[str, float] = {}
+    for module, canonicals in CRITERION_MODULES.items():
+        if not canonicals:
+            continue
+        met_in_module = sum(1 for c in canonicals if c in canonicals_met)
+        pct = round(met_in_module / len(canonicals) * 100, 1)
+        module_scores[module] = pct
+
+    return json.dumps(module_scores, ensure_ascii=False) if module_scores else None, None
+
+
+def compute_threshold_distance(
+    criteria_met: Optional[list[str]],
+    signal_direction: str,     # "BUY" | "SELL"
+    regime_type: str,          # "BULL" | "BEAR" | "SIDEWAYS" | "HIGH_VOLATILITY" | "UNKNOWN"
+) -> Optional[float]:
+    """
+    Calcula a distância acima do mínimo de critérios exigido pelo regime.
+    Ex: regime BULL exige 3 critérios BUY. Se 4 foram atendidos → distance = +1.0.
+    Se o regime exigir 3 mas apenas 2 foram atendidos → distance = -1.0 (sinal não emitido).
+    """
+    # Import necessário aqui para evitar circular imports no topo
+    from app.services.analysis.signal_engine import REGIME_CONFIG
+
+    cfg = REGIME_CONFIG.get(regime_type, REGIME_CONFIG.get("UNKNOWN", {}))
+    key = "buy_min_criteria" if signal_direction == "BUY" else "sell_min_criteria"
+    min_req = cfg.get(key, 3)
+
+    count = len(criteria_met) if criteria_met else 0
+    return float(count - min_req)
 
 
 # ─────────────────────────────────────────────

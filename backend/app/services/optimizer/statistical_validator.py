@@ -159,32 +159,54 @@ def _normal_cdf(x: float) -> float:
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
 
 
+def _pnl_net(r) -> float:
+    """Retorna net_pnl_pct (fee-ajustado) se disponível, senão pnl_pct."""
+    if hasattr(r, "net_pnl_pct") and r.net_pnl_pct is not None:
+        return r.net_pnl_pct
+    return r.pnl_pct or 0.0
+
+
 def _compute_metrics_from_rows(rows: list) -> dict:
-    """Calcula métricas básicas de uma lista de SignalHistory."""
+    """Calcula métricas básicas de uma lista de SignalHistory.
+    Usa net_pnl_pct (fee-ajustado, V7.11) quando disponível.
+    """
     if not rows:
         return {"resolved": 0, "wins": 0, "losses": 0,
                 "win_rate": 0.0, "profit_factor": 0.0, "expectancy": 0.0,
-                "sharpe": 0.0, "max_drawdown": 0.0}
+                "sharpe": 0.0, "max_drawdown": 0.0,
+                "net_win_rate": 0.0, "net_profit_factor": 0.0, "net_expectancy": 0.0}
 
     resolved = [r for r in rows if r.outcome in (SignalOutcome.WIN, SignalOutcome.LOSS)]
     if not resolved:
         return {"resolved": 0, "wins": 0, "losses": 0,
                 "win_rate": 0.0, "profit_factor": 0.0, "expectancy": 0.0,
-                "sharpe": 0.0, "max_drawdown": 0.0}
+                "sharpe": 0.0, "max_drawdown": 0.0,
+                "net_win_rate": 0.0, "net_profit_factor": 0.0, "net_expectancy": 0.0}
 
     wins   = [r for r in resolved if r.outcome == SignalOutcome.WIN]
     losses = [r for r in resolved if r.outcome == SignalOutcome.LOSS]
     wr     = len(wins) / len(resolved) * 100 if resolved else 0.0
 
-    gains      = [abs(r.pnl_pct or 0) for r in wins]
-    losses_pnl = [abs(r.pnl_pct or 0) for r in losses]
+    gains      = [abs(_pnl_net(r)) for r in wins]
+    losses_pnl = [abs(_pnl_net(r)) for r in losses]
     avg_gain   = sum(gains) / len(gains) if gains else 0.0
     avg_loss   = sum(losses_pnl) / len(losses_pnl) if losses_pnl else 1.0
     pf         = avg_gain / avg_loss if avg_loss > 0 else 0.0
-    exp        = sum(r.pnl_pct or 0 for r in resolved) / len(resolved)
+    exp        = sum(_pnl_net(r) for r in resolved) / len(resolved)
+
+    # ── Net (reclassificado)
+    net_wins   = [r for r in resolved if _pnl_net(r) > 0]
+    net_losses = [r for r in resolved if _pnl_net(r) <= 0]
+    nw = len(net_wins)
+    nl_ = len(net_losses)
+    net_wr = nw / len(resolved) * 100 if resolved else 0.0
+    net_avg_win  = sum(_pnl_net(r) for r in net_wins) / nw if nw else 0.0
+    net_avg_loss = sum(abs(_pnl_net(r)) for r in net_losses) / nl_ if nl_ else 1.0
+    net_pf = net_avg_win / net_avg_loss if net_avg_loss > 0 else 0.0
+    net_exp = sum(_pnl_net(r) for r in resolved) / len(resolved)
 
     # Sharpe aproximado
-    pnl_values = [r.pnl_pct or 0 for r in resolved]
+    pnl_values = [_pnl_net(r) for r in resolved]
     mean_pnl = sum(pnl_values) / len(pnl_values)
     variance = sum((p - mean_pnl) ** 2 for p in pnl_values) / len(pnl_values) if len(pnl_values) > 1 else 0
     sharpe   = mean_pnl / math.sqrt(variance) if variance > 0 else 0.0
@@ -193,7 +215,7 @@ def _compute_metrics_from_rows(rows: list) -> dict:
     dd = 0.0
     current_dd = 0.0
     for r in resolved:
-        pnl = r.pnl_pct or 0
+        pnl = _pnl_net(r)
         if pnl < 0:
             current_dd += abs(pnl)
         else:
@@ -206,6 +228,8 @@ def _compute_metrics_from_rows(rows: list) -> dict:
         "win_rate": round(wr, 2), "profit_factor": round(pf, 4),
         "expectancy": round(exp, 4), "sharpe": round(sharpe, 4),
         "max_drawdown": round(dd, 4),
+        "net_win_rate": round(net_wr, 2), "net_profit_factor": round(net_pf, 4),
+        "net_expectancy": round(net_exp, 4),
     }
 
 

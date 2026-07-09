@@ -65,16 +65,20 @@ class TradeMetrics:
     closed_trades:   int
     long_trades:     int
     short_trades:    int
-    win_rate:        float    # 0-100 %
+    win_rate:        float    # 0-100 % (gross)
     win_rate_long:   float
     win_rate_short:  float
-    profit_factor:   float
-    avg_gain:        float    # USD
-    avg_loss:        float    # USD
+    profit_factor:   float    # gross
+    avg_gain:        float    # USD (gross)
+    avg_loss:        float    # USD (gross)
     max_drawdown:    float    # %
-    total_pnl:       float    # USD
-    total_pnl_pct:   float    # %
+    total_pnl:       float    # USD (gross)
+    total_pnl_pct:   float    # % (gross)
     current_balance: float
+    # V7.11 — Net (fee-ajustado)
+    net_win_rate:    float    = 0.0
+    net_profit_factor: float  = 0.0
+    total_net_pnl_pct: float  = 0.0
 
 
 # ── V7: Paper Risk Manager (Circuit Breaker por Regime) ────────────────────────
@@ -325,29 +329,41 @@ class TradeEngine:
             pnl     = (entry - exit_price) * qty
             pnl_pct = (entry - exit_price) / entry * 100
 
+        # V7.11 — Fee & slippage: 0.06% taker + 0.02% slippage por perna, arredondado
+        FEE_SLIPPAGE_TOTAL_PCT = 0.0008 * 2  # 0.08% entrada + 0.08% saída = 0.16%
+        fee_cost = round(FEE_SLIPPAGE_TOTAL_PCT * 100, 4)  # em pontos percentuais
+
+        pnl_pct_rounded = round(pnl_pct, 4)
+        net_pnl_pct_val = round(pnl_pct_rounded - fee_cost, 4)
+        # PnL USD líquido de taxas
+        pnl_net = pnl - round(entry * qty * FEE_SLIPPAGE_TOTAL_PCT, 6)
+
         trade.exit_price         = exit_price
         trade.pnl                = round(pnl, 6)
-        trade.pnl_percent        = round(pnl_pct, 4)
+        trade.pnl_percent        = pnl_pct_rounded
+        trade.fee_cost_pct       = fee_cost
+        trade.net_pnl_percent    = net_pnl_pct_val
         trade.close_reason       = reason
         trade.status             = TradeStatus.CLOSED.value
         trade.closed_at          = datetime.now(timezone.utc)
         trade.exit_score_at_close = exit_score  # Phase 12
 
-        # Atualiza saldo
+        # Atualiza saldo (com fee-ajuste)
         result  = await session.execute(select(PaperAccount).limit(1))
         account = result.scalar_one_or_none()
         if account:
-            account.balance    = round(account.balance + pnl, 6)
+            account.balance    = round(account.balance + pnl_net, 6)
             account.updated_at = datetime.now(timezone.utc)
 
-        outcome = "WIN" if pnl >= 0 else "LOSS"
+        outcome = "WIN" if net_pnl_pct_val > 0 else "LOSS"
         logger.info(
             f"[TradeEngine] FECHADO {trade.symbol} {side} @ {exit_price:.4f} "
-            f"pnl={pnl:+.6f} ({pnl_pct:+.2f}%) motivo={reason} [{outcome}]"
+            f"gross={pnl_pct:+.3f}% net={net_pnl_pct_val:+.3f}% "
+            f"motivo={reason} [{outcome}]"
         )
 
-        # V7: registra resultado no circuit breaker por regime
-        paper_risk.record_trade(won=(pnl >= 0), regime=regime_label)
+        # V7.11: registra resultado no circuit breaker (net, fee-ajustado)
+        paper_risk.record_trade(won=(net_pnl_pct_val > 0), regime=regime_label)
 
         # Resolve sinal correspondente no signal_history (Phase 6)
         try:
@@ -442,22 +458,36 @@ class TradeEngine:
         total_pnl    = sum(t.pnl for t in closed if t.pnl)
         max_drawdown = self._calculate_max_drawdown(closed, initial)
 
+        # V7.11 — Net metrics (fee-ajustado)
+        _net_pnl = lambda t: (t.net_pnl_percent if t.net_pnl_percent is not None else t.pnl_percent or 0.0)
+        net_wins   = [t for t in closed if _net_pnl(t) > 0]
+        net_losses = [t for t in closed if _net_pnl(t) <= 0]
+        net_wr = (len(net_wins) / len(closed) * 100) if closed else 0.0
+        net_gp = sum(_net_pnl(t) for t in net_wins)
+        net_gl = abs(sum(_net_pnl(t) for t in net_losses)) if net_losses else 0.0
+        net_pf = (net_gp / net_gl) if net_gl > 0 else (float("inf") if net_gp > 0 else 0.0)
+        total_net_pnl = sum(_net_pnl(t) for t in closed)
+
         return TradeMetrics(
-            total_trades    = len(trades),
-            open_trades     = open_cnt,
-            closed_trades   = len(closed),
-            long_trades     = len(longs),
-            short_trades    = len(shorts),
-            win_rate        = round(win_rate, 2),
-            win_rate_long   = round(win_rate_long, 2),
-            win_rate_short  = round(win_rate_short, 2),
-            profit_factor   = round(profit_factor, 4),
-            avg_gain        = round(avg_gain, 6),
-            avg_loss        = round(avg_loss, 6),
-            max_drawdown    = round(max_drawdown, 2),
-            total_pnl       = round(total_pnl, 6),
-            total_pnl_pct   = round((total_pnl / initial) * 100, 4) if initial else 0.0,
-            current_balance = round(balance, 4),
+            total_trades     = len(trades),
+            open_trades      = open_cnt,
+            closed_trades    = len(closed),
+            long_trades      = len(longs),
+            short_trades     = len(shorts),
+            win_rate         = round(win_rate, 2),
+            win_rate_long    = round(win_rate_long, 2),
+            win_rate_short   = round(win_rate_short, 2),
+            profit_factor    = round(profit_factor, 4),
+            avg_gain         = round(avg_gain, 6),
+            avg_loss         = round(avg_loss, 6),
+            max_drawdown     = round(max_drawdown, 2),
+            total_pnl        = round(total_pnl, 6),
+            total_pnl_pct    = round((total_pnl / initial) * 100, 4) if initial else 0.0,
+            current_balance  = round(balance, 4),
+            # V7.11
+            net_win_rate     = round(net_wr, 2),
+            net_profit_factor= round(net_pf, 4),
+            total_net_pnl_pct= round(total_net_pnl, 4),
         )
 
     def _calculate_max_drawdown(

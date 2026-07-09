@@ -219,9 +219,18 @@ class ScalperTradeEngine:
                         * (1 if trade.trade_side == "LONG" else -1), 6)
         pnl_pct_rounded = round(pnl_pct * 100, 4)
 
+        # V7.11 — Fee & slippage modeling (0.06% entrada + 0.06% saída)
+        FEE_PER_LEG       = 0.0006   # 0.06% taker
+        SLIPPAGE_LEG      = 0.0002   # 0.02% slippage
+        FEE_SLIPPAGE_TOTAL = (FEE_PER_LEG + SLIPPAGE_LEG) * 2  # entrada + saída
+        fee_pct  = round(FEE_SLIPPAGE_TOTAL * 100, 4)  # em %
+        net_pnl  = round(pnl_pct_rounded - fee_pct, 4)
+
         trade.exit_price      = exit_price
         trade.pnl             = pnl_usd
         trade.pnl_pct         = pnl_pct_rounded
+        trade.fee_cost_pct    = fee_pct
+        trade.net_pnl_pct     = net_pnl
         trade.status          = "CLOSED"
         trade.close_reason    = reason
         trade.closed_at       = now
@@ -229,15 +238,18 @@ class ScalperTradeEngine:
             (now - trade.opened_at.replace(tzinfo=timezone.utc)).total_seconds() / 60, 1
         )
 
-        # Atualiza conta
+        # V7.11 — Fee-ajustado para account e risk daily
+        pnl_usd_net = pnl_usd - round(trade.quantity * trade.entry_price * (FEE_SLIPPAGE_TOTAL), 6)
+
+        # Atualiza conta (com fee-ajuste)
         acc = await self._get_or_create_account(session)
-        acc.balance    += pnl_usd
-        acc.total_pnl  += pnl_usd
+        acc.balance    += pnl_usd_net
+        acc.total_pnl  += pnl_usd_net
         if acc.balance > acc.peak_balance:
             acc.peak_balance = acc.balance
         acc.updated_at = now
 
-        # Atualiza risco diário (USD)
+        # Atualiza risco diário (USD) — valor líquido de taxas
         from sqlalchemy import select as sa_select
         from app.models.scalper import ScalperRiskDaily
         from datetime import date
@@ -246,18 +258,19 @@ class ScalperTradeEngine:
             sa_select(ScalperRiskDaily).where(ScalperRiskDaily.date == today)
         )
         if risk_row:
-            risk_row.daily_pnl_usd += pnl_usd
+            risk_row.daily_pnl_usd += pnl_usd_net
             risk_row.updated_at     = now
 
-        won = pnl_usd > 0
+        won = net_pnl > 0  # V7.11: usa net (fee-ajustado) para classificar
         logger.info(
-            f"[Scalper] FECHADO {trade.symbol} {trade.trade_side} @ {exit_price:.4f} "
-            f"PnL={pnl_usd:+.4f} USD ({pnl_pct_rounded:+.3f}%) motivo={reason}"
+            f"[Scalper] FECHADO {trade.symbol} {trade.trade_side} "
+            f"@ {exit_price:.4f} gross={pnl_pct_rounded:+.3f}% "
+            f"net={net_pnl:+.3f}% motivo={reason}"
         )
 
-        # Registra no risk manager (pnl_pct em %) — V7: inclui regime para circuit breaker
+        # Registra no risk manager (usando net_pnl — V7.11)
         regime = getattr(trade, "trend_15m", None)
-        await scalper_risk.record_trade(pnl_pct_rounded, won, regime=regime)
+        await scalper_risk.record_trade(net_pnl, won, regime=regime)
 
     # ── Debug info ────────────────────────────────────────────────────────────
     async def get_debug_info(self) -> dict:
