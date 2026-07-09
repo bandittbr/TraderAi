@@ -14,8 +14,9 @@ from app.logger import logger
 
 # ── Configurações ─────────────────────────────────────────────────────────────
 RISK_USD_PER_TRADE  = 10.0     # USD arriscado por trade
-SL_PCT              = 0.0025   # 0.25%
-TP_PCT              = 0.0050   # 0.50%
+SL_PCT              = 0.0025   # Mínimo 0.25% — adaptativo via ATR se disponível
+SL_ATR_MULTIPLIER   = 1.5      # V7: SL = max(0.25%, ATR_1m% × 1.5)
+TP_RR               = 2.0      # V7: TP = SL × 2 (R:R 1:2)
 BE_TRIGGER_PCT      = 0.0020   # BE ativa em +0.20%
 TRAILING_TRIGGER_PCT = 0.0040  # Trailing ativa em +0.40%
 TRAILING_DIST_PCT   = 0.0015   # Distância trailing 0.15%
@@ -64,10 +65,12 @@ class ScalperTradeEngine:
                     await self._manage_open_trade(session, open_trade, sig)
                 elif sig.direction in ("LONG", "SHORT"):
                     can, reason = await scalper_risk.can_trade()
-                    if can:
-                        await self._open_trade(session, sig)
+                    if not can:
+                        logger.debug(f"[Scalper] {sig.symbol} bloqueado global: {reason}")
+                    elif scalper_risk.is_regime_paused(sig.trend_15m):
+                        logger.info(f"[Scalper] {sig.symbol} {sig.direction} ignorado — regime {sig.trend_15m} PAUSADO")
                     else:
-                        logger.debug(f"[Scalper] {sig.symbol} bloqueado: {reason}")
+                        await self._open_trade(session, sig)
 
                 await session.commit()
 
@@ -79,36 +82,51 @@ class ScalperTradeEngine:
         price = sig.price
         side  = sig.direction   # LONG / SHORT
 
+        # V7: SL adaptativo por ATR — mínimo 0.25%, adapta se ATR > 0.167%
+        atr_pct = getattr(sig, "atr_1m_pct", None)
+        if atr_pct and atr_pct > 0:
+            sl_pct = max(SL_PCT, atr_pct / 100 * SL_ATR_MULTIPLIER)
+        else:
+            sl_pct = SL_PCT
+        tp_pct = sl_pct * TP_RR  # R:R 1:2
+
+        # V7: risco escala com confiança (conf 50 → 50% do risco, conf 100 → 100%)
+        confidence_scale = max(0.25, min(1.0, (sig.confidence or 65) / 100))
+        # V7: regime sizing multiplier (circuit breaker)
+        regime_scale = scalper_risk.regime_sizing_multiplier(sig.trend_15m)
+        risk_amount = RISK_USD_PER_TRADE * confidence_scale * regime_scale
+
         if side == "LONG":
-            sl_price = round(price * (1 - SL_PCT), 8)
-            tp_price = round(price * (1 + TP_PCT), 8)
+            sl_price = round(price * (1 - sl_pct), 8)
+            tp_price = round(price * (1 + tp_pct), 8)
             be_price = round(price * (1 + BE_TRIGGER_PCT), 8)
         else:
-            sl_price = round(price * (1 + SL_PCT), 8)
-            tp_price = round(price * (1 - TP_PCT), 8)
+            sl_price = round(price * (1 + sl_pct), 8)
+            tp_price = round(price * (1 - tp_pct), 8)
             be_price = round(price * (1 - BE_TRIGGER_PCT), 8)
 
-        qty = round(RISK_USD_PER_TRADE / (price * SL_PCT), 6)
+        qty = round(risk_amount / (price * sl_pct), 6)
 
         trade = ScalperTrade(
-            symbol           = sig.symbol,
-            timeframe_entry  = "1m",
-            trade_side       = side,
-            trend_15m        = sig.trend_15m,
-            confirm_5m       = sig.confirm_5m,
-            confidence       = sig.confidence,
-            entry_price      = price,
-            quantity         = qty,
-            risk_usd         = RISK_USD_PER_TRADE,
-            stop_loss_price  = sl_price,
-            take_profit_price= tp_price,
-            break_even_price = be_price,
-            status           = "OPEN",
+            symbol            = sig.symbol,
+            timeframe_entry   = "1m",
+            trade_side        = side,
+            trend_15m         = sig.trend_15m,
+            confirm_5m        = sig.confirm_5m,
+            confidence        = sig.confidence,
+            entry_price       = price,
+            quantity          = qty,
+            risk_usd          = round(RISK_USD_PER_TRADE * (sig.confidence / 100), 2) if sig.confidence > 0 else RISK_USD_PER_TRADE,
+            stop_loss_price   = sl_price,
+            take_profit_price = tp_price,
+            break_even_price  = be_price,
+            status            = "OPEN",
         )
         session.add(trade)
         logger.info(
             f"[Scalper] ABERTO {sig.symbol} {side} @ {price:.4f} "
-            f"SL={sl_price:.4f} TP={tp_price:.4f} conf={sig.confidence:.0f}%"
+            f"SL={sl_price:.4f} ({sl_pct*100:.3f}%) TP={tp_price:.4f} ({tp_pct*100:.3f}%) "
+            f"conf={sig.confidence:.0f}% atr={atr_pct}%"
         )
 
     # ── Gerenciar trade aberto ────────────────────────────────────────────────
@@ -186,10 +204,10 @@ class ScalperTradeEngine:
                     await self._close_trade(session, trade, price, "TRAILING_STOP", pnl_pct, now)
                     return
 
-        # ── 6. Sinal inverso (opcional) ───────────────────────────────────────
+        # ── 6. Sinal inverso ──────────────────────────────────────────────────
         reverse = (side == "LONG" and sig.direction == "SHORT") or \
                   (side == "SHORT" and sig.direction == "LONG")
-        if reverse and sig.confidence >= 65:
+        if reverse:
             await self._close_trade(session, trade, price, "SIGNAL_CLOSE", pnl_pct, now)
 
     # ── Fechar trade ──────────────────────────────────────────────────────────
@@ -237,8 +255,9 @@ class ScalperTradeEngine:
             f"PnL={pnl_usd:+.4f} USD ({pnl_pct_rounded:+.3f}%) motivo={reason}"
         )
 
-        # Registra no risk manager (pnl_pct em %)
-        await scalper_risk.record_trade(pnl_pct_rounded, won)
+        # Registra no risk manager (pnl_pct em %) — V7: inclui regime para circuit breaker
+        regime = getattr(trade, "trend_15m", None)
+        await scalper_risk.record_trade(pnl_pct_rounded, won, regime=regime)
 
     # ── Debug info ────────────────────────────────────────────────────────────
     async def get_debug_info(self) -> dict:

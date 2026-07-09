@@ -4,9 +4,8 @@ TradeAI - Trade Engine V2 (Futures Completo)
 Simulador de Futures com suporte a LONG e SHORT.
 
 ABERTURA:
-  LONG  — signal BUY  + confidence >= 62%
-  SHORT — signal SELL + confidence >= 62%
-  (filtro de trend removido: regime-adaptive signal ja cumpre esse papel)
+  LONG  — qualquer sinal BUY (sem threshold de confiança)
+  SHORT — qualquer sinal SELL (sem threshold de confiança)
 
 FECHAMENTO:
   LONG:
@@ -140,9 +139,8 @@ class TradeEngine:
                 elif self._should_open(sig):
                     await self._open_trade(session, sig)
                 else:
-                    # Confidence < 70% ou NEUTRAL
-                    if sig.signal in ("BUY", "SELL"):
-                        TradeEngine._signals_rejected_confidence += 1
+                    # NEUTRAL — sem ação
+                    pass
 
                 await session.commit()
 
@@ -153,14 +151,10 @@ class TradeEngine:
 
     def _should_open(self, sig: SignalInput) -> bool:
         """
-        Abre LONG em BUY >= 70% ou SHORT em SELL >= 70%.
-        Sem filtro de trend: o regime-adaptive signal engine ja filtra qualidade.
+        Abre em qualquer sinal BUY ou SELL — sem threshold de confiança.
+        O signal engine ja filtra qualidade dos sinais upstream.
         """
-        if sig.signal == "BUY"  and sig.confidence >= 62:
-            return True
-        if sig.signal == "SELL" and sig.confidence >= 62:
-            return True
-        return False
+        return sig.signal in ("BUY", "SELL")
 
     def _get_side(self, sig: SignalInput) -> str:
         """BUY -> LONG, SELL -> SHORT."""
@@ -168,8 +162,12 @@ class TradeEngine:
 
     async def _open_trade(self, session, sig: SignalInput) -> None:
         """Abre novo trade LONG ou SHORT."""
-        side     = self._get_side(sig)
-        quantity = round(settings.paper_risk_per_trade / sig.price, 8)
+        side = self._get_side(sig)
+
+        # V7: quantidade escala com confiança (50% → 50% do risco, 100% → 100%)
+        confidence_scale = max(0.25, min(1.0, (sig.confidence or 50) / 100))
+        risk_effective   = settings.paper_risk_per_trade * confidence_scale
+        quantity = round(risk_effective / sig.price, 8)
 
         trade = PaperTrade(
             symbol      = sig.symbol,
@@ -184,7 +182,7 @@ class TradeEngine:
         session.add(trade)
         logger.info(
             f"[TradeEngine] ABERTO  {sig.symbol} {side} @ {sig.price:.4f} "
-            f"qty={quantity:.6f} conf={sig.confidence:.0f}%"
+            f"qty={quantity:.6f} risk=${risk_effective:.2f} conf={sig.confidence:.0f}%"
         )
 
     # ── Regras de fechamento ──────────────────────────────────────────────────
@@ -522,7 +520,7 @@ class TradeEngine:
             "config": {
                 "sl_pct":                   settings.paper_stop_loss_percent,
                 "tp_pct":                   settings.paper_take_profit_percent,
-                "min_confidence_to_open":   62.0,  # Phase 13: calibrado para 8/13 criterios
+                "min_confidence_to_open":   0.0,  # Sem limite — toda oportunidade é aproveitada
                 "close_by_signal":          "any SELL closes LONG / any BUY closes SHORT (sem filtro de confidence)",
             },
             # Diagnóstico

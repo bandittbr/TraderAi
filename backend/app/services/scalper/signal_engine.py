@@ -27,6 +27,9 @@ class ScalperSignalResult:
     rsi_5m:     float | None = None
     ema9_15m:   float | None = None
     ema21_15m:  float | None = None
+    atr_1m_pct: float | None = None  # V7: ATR(14) percentual para SL adaptativo
+    obv_trend:  str | None = None    # V7: OBV BULL/BEAR/NEUTRAL (confirma volume)
+    volume_spike: bool = False       # V7: spike de volume na última vela 5m
     reasons:    list[str]    = field(default_factory=list)
 
 
@@ -82,6 +85,70 @@ def _macd_histogram(closes: list[float]) -> float:
     return round(macd_line[-1] - sig, 8)
 
 
+def _volumes(candles) -> list[float]:
+    return [float(c.volume) for c in candles]
+
+def _obv(candles) -> list[float]:
+    """On-Balance Volume: OBV acumula volume com base no fechamento."""
+    obv_vals = [0.0]
+    for i in range(1, len(candles)):
+        close  = float(candles[i].close)
+        pclose = float(candles[i - 1].close)
+        vol    = float(candles[i].volume)
+        if close > pclose:
+            obv_vals.append(obv_vals[-1] + vol)
+        elif close < pclose:
+            obv_vals.append(obv_vals[-1] - vol)
+        else:
+            obv_vals.append(obv_vals[-1])
+    return obv_vals
+
+def _obv_trend(obv_vals: list[float], period: int = 14) -> str:
+    """OBV_EMA(period) vs OBV_EMA(period*2): 'BULL' | 'BEAR' | 'NEUTRAL'."""
+    if len(obv_vals) < period * 2:
+        return "NEUTRAL"
+    fast = _ema(obv_vals, period)
+    slow = _ema(obv_vals, period * 2)
+    margin = (fast - slow) / abs(slow) * 100 if slow != 0 else 0
+    if margin > 0.5:
+        return "BULL"
+    if margin < -0.5:
+        return "BEAR"
+    return "NEUTRAL"
+
+def _volume_spike(candles, lookback: int = 20, multiplier: float = 1.5) -> bool:
+    """Volume do último candle > multiplier × média dos últimos lookback."""
+    if len(candles) < lookback + 1:
+        return False
+    vols = _volumes(candles)
+    avg  = sum(vols[-(lookback+1):-1]) / lookback
+    return vols[-1] > avg * multiplier
+
+
+def _atr(candles, period: int = 14) -> float:
+    """
+    Calcula ATR (Average True Range) a partir de velas OHLCV.
+    TR = max(high - low, |high - prev_close|, |low - prev_close|)
+    ATR = EMA(TR, period)
+    """
+    if len(candles) < period + 1:
+        return 0.0
+    tr_values = []
+    prev_close = float(candles[0].close)
+    for c in candles[1:]:
+        high = float(c.high)
+        low  = float(c.low)
+        tr   = max(high - low, abs(high - prev_close), abs(low - prev_close))
+        tr_values.append(tr)
+        prev_close = float(c.close)
+    # ATR = EMA do TR (Wilder's smoothing)
+    atr = sum(tr_values[:period]) / period
+    k = 1.0 / period
+    for tr in tr_values[period:]:
+        atr = tr * k + atr * (1 - k)
+    return atr
+
+
 # ─ Etapas MTF ─────────────────────────────────────────────────────────────────
 def _trend_15m(candles_15m) -> tuple[str, float | None, float | None, float | None, list[str]]:
     """
@@ -114,20 +181,27 @@ def _trend_15m(candles_15m) -> tuple[str, float | None, float | None, float | No
     return "SIDEWAYS", ema9, ema21, ema50, reasons
 
 
-def _confirm_5m(candles_5m, trend: str) -> tuple[bool, float | None, list[str]]:
+def _confirm_5m(candles_5m, trend: str) -> tuple[bool, float | None, str | None, bool, list[str]]:
     """
-    Confirma no 5m.
+    Confirma no 5m com OBV (V7).
     LONG : RSI 30-58, EMA9>EMA21, preço perto ou abaixo do EMA9 (pullback)
     SHORT: RSI 42-70, EMA9<EMA21, preço perto ou acima do EMA9 (bounce)
+    OBV confirma direção do volume.
+    Retorna: (confirm, rsi, obv_trend, volume_spike, reasons)
     """
     if len(candles_5m) < 25:
-        return False, None, ["5m: candles insuficientes"]
+        return False, None, None, False, ["5m: candles insuficientes"]
 
     closes = _closes(candles_5m)
     price  = closes[-1]
     rsi    = _rsi(closes[-20:])
     ema9   = _ema(closes, 9)
     ema21  = _ema(closes, 21)
+
+    # V7: OBV
+    obv_vals     = _obv(candles_5m)
+    obv_t        = _obv_trend(obv_vals, 14)
+    vol_spike    = _volume_spike(candles_5m, 20, 1.5)
     reasons: list[str] = []
 
     if trend == "BULL":
@@ -135,24 +209,34 @@ def _confirm_5m(candles_5m, trend: str) -> tuple[bool, float | None, list[str]]:
         micro_bull = ema9 > ema21
         rsi_ok     = 30 <= rsi <= 58
         ok = micro_bull and rsi_ok and (near_ema9 or price < ema9 * 1.001)
+        # OBV confirma: BULL + volume_spike recebe bonus, BEAR não invalida
+        obv_ok = obv_t in ("BULL", "NEUTRAL")
+        if not obv_ok:
+            ok = False
         reasons.append(
-            f"5m LONG confirm: RSI={rsi:.1f} EMA9={ema9:.4f} EMA21={ema21:.4f} "
-            f"near_ema9={near_ema9} micro_bull={micro_bull} ok={ok}"
+            f"5m LONG: RSI={rsi:.1f} EMA9={ema9:.4f} EMA21={ema21:.4f} "
+            f"near_ema9={near_ema9} micro_bull={micro_bull} ok={ok} "
+            f"OBV={obv_t} spike={vol_spike}"
         )
-        return ok, rsi, reasons
+        return ok, rsi, obv_t, vol_spike, reasons
 
     if trend == "BEAR":
         near_ema9  = abs(price - ema9) / ema9 <= 0.005
         micro_bear = ema9 < ema21
         rsi_ok     = 42 <= rsi <= 70
         ok = micro_bear and rsi_ok and (near_ema9 or price > ema9 * 0.999)
+        # OBV confirma: BEAR + volume_spike recebe bonus
+        obv_ok = obv_t in ("BEAR", "NEUTRAL")
+        if not obv_ok:
+            ok = False
         reasons.append(
-            f"5m SHORT confirm: RSI={rsi:.1f} EMA9={ema9:.4f} EMA21={ema21:.4f} "
-            f"near_ema9={near_ema9} micro_bear={micro_bear} ok={ok}"
+            f"5m SHORT: RSI={rsi:.1f} EMA9={ema9:.4f} EMA21={ema21:.4f} "
+            f"near_ema9={near_ema9} micro_bear={micro_bear} ok={ok} "
+            f"OBV={obv_t} spike={vol_spike}"
         )
-        return ok, rsi, reasons
+        return ok, rsi, obv_t, vol_spike, reasons
 
-    return False, rsi, [f"5m: sem confirmação para SIDEWAYS"]
+    return False, rsi, obv_t, vol_spike, [f"5m: sem confirmação para SIDEWAYS"]
 
 
 def _entry_1m(candles_1m, trend: str) -> tuple[bool, float | None, list[str]]:
@@ -240,23 +324,38 @@ def evaluate_scalper_signal(
             reasons=r15,
         )
 
-    confirm, rsi_5m, r5  = _confirm_5m(candles_5m, trend)
-    entry,   rsi_1m, r1  = _entry_1m(candles_1m,   trend)
+    # V7: _confirm_5m agora retorna OBV também
+    confirm, rsi_5m, obv_t, vol_spike, r5  = _confirm_5m(candles_5m, trend)
+    entry,   rsi_1m, r1                     = _entry_1m(candles_1m,   trend)
     conf   = _confidence(trend, confirm, entry, rsi_5m, rsi_1m)
+
+    # V7: ATR percentual para SL adaptativo
+    atr_val  = _atr(candles_1m, 14)
+    atr_pct  = round((atr_val / price * 100), 4) if atr_val > 0 and price > 0 else None
+
+    # V7: OBV boost na confidence se volume confirma direção
+    if confirm and obv_t == trend and vol_spike:
+        conf = min(conf + 5, 100)
+    # V7: OBV penaliza se volume contradiz direção
+    if confirm and obv_t is not None and obv_t not in (trend, "NEUTRAL"):
+        conf = max(conf - 10, 0)
 
     direction: Direction = ("LONG" if trend == "BULL" else "SHORT") if (confirm and entry) else "NONE"
 
     return ScalperSignalResult(
-        symbol     = symbol,
-        direction  = direction,
-        price      = price,
-        confidence = conf,
-        trend_15m  = trend,
-        confirm_5m = confirm,
-        entry_1m   = entry,
-        rsi_1m     = rsi_1m,
-        rsi_5m     = rsi_5m,
-        ema9_15m   = ema9_15m,
-        ema21_15m  = ema21_15m,
-        reasons    = r15 + r5 + r1,
+        symbol       = symbol,
+        direction    = direction,
+        price        = price,
+        confidence   = conf,
+        trend_15m    = trend,
+        confirm_5m   = confirm,
+        entry_1m     = entry,
+        rsi_1m       = rsi_1m,
+        rsi_5m       = rsi_5m,
+        ema9_15m     = ema9_15m,
+        ema21_15m    = ema21_15m,
+        atr_1m_pct   = atr_pct,
+        obv_trend    = obv_t,
+        volume_spike = vol_spike,
+        reasons      = r15 + r5 + r1,
     )

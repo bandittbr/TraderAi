@@ -15,9 +15,6 @@ interface RiskDay {
 
 function safe(v: unknown, d = 0): number { const n = Number(v); return isFinite(n) ? n : d; }
 
-const MAX_CONSEC = 5;
-const MAX_DAILY  = 3.0;
-
 export default function ScalperRisk() {
   const [risk,    setRisk]    = useState<RiskDay | null>(null);
   const [history, setHistory] = useState<RiskDay[]>([]);
@@ -38,64 +35,38 @@ export default function ScalperRisk() {
     return () => clearInterval(id);
   }, []);
 
-  const consec    = safe(risk?.consecutive_losses);
-  const dailyPct  = safe(risk?.daily_pnl_pct);
-  const blocked   = risk?.is_blocked ?? false;
-  const consecPct = Math.min(consec / MAX_CONSEC * 100, 100);
-  const dailyUsed = Math.min(Math.abs(dailyPct) / MAX_DAILY * 100, 100);
-
-  const Bar = ({ pct, color }: { pct: number; color: string }) => (
-    <div className="h-2 rounded-full overflow-hidden" style={{ background: "#141c2e" }}>
-      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
-    </div>
-  );
+  const consec   = safe(risk?.consecutive_losses);
+  const dailyPct = safe(risk?.daily_pnl_pct);
 
   return (
     <div className="rounded-2xl p-5" style={{ background: "#0a1020", border: "1px solid #141c2e" }}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-white">Risk Manager</h2>
-        {blocked && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-            style={{ background: "#3b0a0a", color: "#ef4444", border: "1px solid #7f1d1d" }}>
-            BLOQUEADO
-          </span>
-        )}
-        {!blocked && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full"
-            style={{ background: "#052e16", color: "#22c55e", border: "1px solid #14532d" }}>
-            ATIVO
-          </span>
-        )}
+        <h2 className="text-sm font-semibold text-white">Risk Stats</h2>
+        <span className="text-[10px] px-2 py-0.5 rounded-full"
+          style={{ background: "#052e16", color: "#22c55e", border: "1px solid #14532d" }}>
+          LIVRE
+        </span>
       </div>
-
-      {blocked && risk?.block_reason && (
-        <div className="mb-4 px-3 py-2 rounded-lg text-xs text-red-300"
-          style={{ background: "#2d0a0a", border: "1px solid #7f1d1d" }}>
-          {risk.block_reason}
-        </div>
-      )}
 
       <div className="space-y-4">
         {/* Perdas consecutivas */}
         <div>
           <div className="flex justify-between items-center mb-1.5">
             <span className="text-[11px] text-[#4a6080]">Perdas Consecutivas</span>
-            <span className={`text-xs font-mono font-bold ${consec >= MAX_CONSEC ? "text-red-400" : consec >= 3 ? "text-amber-400" : "text-emerald-400"}`}>
-              {consec} / {MAX_CONSEC}
+            <span className={`text-xs font-mono font-bold ${consec >= 5 ? "text-red-400" : consec >= 3 ? "text-amber-400" : "text-emerald-400"}`}>
+              {consec}
             </span>
           </div>
-          <Bar pct={consecPct} color={consec >= MAX_CONSEC ? "#ef4444" : consec >= 3 ? "#f59e0b" : "#22c55e"} />
         </div>
 
-        {/* Perda diária */}
+        {/* PnL Diário */}
         <div>
           <div className="flex justify-between items-center mb-1.5">
-            <span className="text-[11px] text-[#4a6080]">Perda Diária</span>
-            <span className={`text-xs font-mono font-bold ${dailyPct <= -MAX_DAILY ? "text-red-400" : dailyPct <= -1.5 ? "text-amber-400" : dailyPct < 0 ? "text-white" : "text-emerald-400"}`}>
-              {dailyPct >= 0 ? "+" : ""}{dailyPct.toFixed(2)}% / -{MAX_DAILY}%
+            <span className="text-[11px] text-[#4a6080]">PnL Diário</span>
+            <span className={`text-xs font-mono font-bold ${dailyPct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {dailyPct >= 0 ? "+" : ""}{dailyPct.toFixed(2)}%
             </span>
           </div>
-          <Bar pct={dailyUsed} color={dailyPct <= -MAX_DAILY ? "#ef4444" : dailyPct <= -1.5 ? "#f59e0b" : "#22c55e"} />
         </div>
 
         {/* Stats do dia */}
@@ -124,7 +95,6 @@ export default function ScalperRisk() {
                   <span className={safe(d.daily_pnl_pct) >= 0 ? "text-emerald-400" : "text-red-400"}>
                     {safe(d.daily_pnl_pct) >= 0 ? "+" : ""}{safe(d.daily_pnl_pct).toFixed(2)}%
                   </span>
-                  {d.is_blocked && <span className="text-[9px] text-red-500">BLOQ</span>}
                 </div>
               ))}
             </div>

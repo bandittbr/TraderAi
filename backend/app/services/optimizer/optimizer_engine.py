@@ -1,7 +1,9 @@
 """
-Fase 8 — Optimizer Engine (Orquestrador)
+Fase 8 / V7 — Optimizer Engine (Orquestrador)
 Coordena: criterion_performance → combination_analyzer → regime_performance
-          → weight_engine → persiste OptimizationSnapshot
+          → weight_engine (GLOBAL + por regime) → persiste OptimizationSnapshot
+V7: Após atualizar pesos GLOBAL, itera por cada regime com dados suficientes
+    e atualiza pesos específicos do regime usando RegimeData.criteria_stats.
 """
 from __future__ import annotations
 
@@ -62,9 +64,36 @@ class OptimizerEngine:
         regime_report = await regime_performance_analyzer.compute(symbol, lookback_days)
         logger.info("[optimizer] Regimes analisados: %d", len(regime_report.regimes))
 
-        # 4. Update weights
+        # 4. Update weights — GLOBAL
         new_weights = await weight_engine.update_weights(criterion_report)
         weight_snap = WeightSnapshot(weights=new_weights, computed_at=datetime.utcnow())
+
+        # 5. V7: Update weights por regime (se houver dados suficientes)
+        regime_weights_updated = []
+        for regime_name, regime_data in regime_report.regimes.items():
+            if regime_data.total_signals < 10 or not regime_data.criteria_stats:
+                logger.debug("[optimizer] Regime %s: dados insuficientes (%d sinais) — pulando",
+                             regime_name, regime_data.total_signals)
+                continue
+            try:
+                current_regime = await weight_engine.load_weights(regime_name)
+                new_regime_w   = weight_engine.compute_new_weights_from_stats(
+                    criteria_stats = regime_data.criteria_stats,
+                    baseline_wr    = regime_data.baseline_wr,
+                    baseline_pf    = regime_data.baseline_pf,
+                    current        = current_regime,
+                    min_sample     = 3,  # regime tem menos dados que GLOBAL
+                )
+                await weight_engine.save_weights(new_regime_w, regime_name)
+                regime_weights_updated.append(regime_name)
+                logger.info("[optimizer] Regime %s — pesos atualizados (%d critérios)",
+                            regime_name, len(new_regime_w))
+            except Exception as e:
+                logger.error("[optimizer] Regime %s — erro ao atualizar pesos: %s",
+                             regime_name, e)
+
+        if regime_weights_updated:
+            logger.info("[optimizer] Regimes atualizados: %s", regime_weights_updated)
 
         result = OptimizationResult(
             criterion_report   = criterion_report,

@@ -1,9 +1,11 @@
 """
-Scalper Risk Manager (Fase 13)
-Controla:
-  - Máximo 5 perdas consecutivas por dia → bloqueia
-  - Máxima perda diária de 3% → bloqueia
-  - Reset automático no próximo dia UTC
+Scalper Risk Manager (Fase 13 / V7)
+- Monitoramento estatístico
+- Circuit Breaker por regime (BULL/BEAR/SIDEWAYS)
+  * 3 consecutivas no regime → posição reduz 50%
+  * 5 consecutivas no regime → pausa (NONE) até próxima entrada vitoriosa
+NÃO bloqueia trades globalmente — apenas ajusta sizing por regime.
+Reset automático no próximo dia UTC.
 """
 from __future__ import annotations
 from datetime import date, datetime, timezone
@@ -12,19 +14,30 @@ from app.database import AsyncSessionLocal
 from app.models.scalper import ScalperRiskDaily
 from app.logger import logger
 
-# ── Limites ───────────────────────────────────────────────────────────────────
-MAX_CONSECUTIVE_LOSSES = 5
-MAX_DAILY_LOSS_PCT     = 3.0   # %
+# ── V7: Parâmetros do Circuit Breaker ────────────────────────────────────────
+REGIME_REDUCE_AFTER   = 3   # perdas consecutivas no regime → sizing 50%
+REGIME_PAUSE_AFTER    = 5   # perdas consecutivas no regime → pausa
+REGIME_REDUCE_FACTOR  = 0.5 # multiplicador de posição quando reduz
+REGIMES               = ("BULL", "BEAR", "SIDEWAYS")
 
 
 class ScalperRiskManager:
 
-    # ── Estado em memória (espelho do DB para velocidade) ─────────────────────
+    # ── Estado em memória ────────────────────────────────────────────────────
     _today_str:           str   = ""
     _consecutive_losses:  int   = 0
     _daily_pnl_pct:       float = 0.0
-    _is_blocked:          bool  = False
-    _block_reason:        str   = ""
+
+    # V7: Circuit Breaker por regime (reset diário)
+    _regime_losses: dict[str, int] = None  # {"BULL": 0, "BEAR": 0, ...}
+    _regime_paused:  dict[str, bool] = None # regimes pausados até win reset
+
+    def __init__(self):
+        self._reset_regime_state()
+
+    def _reset_regime_state(self) -> None:
+        self._regime_losses = {r: 0 for r in REGIMES}
+        self._regime_paused = {r: False for r in REGIMES}
 
     def _today(self) -> str:
         return date.today().isoformat()
@@ -34,8 +47,7 @@ class ScalperRiskManager:
             self._today_str          = today
             self._consecutive_losses = 0
             self._daily_pnl_pct      = 0.0
-            self._is_blocked         = False
-            self._block_reason       = ""
+            self._reset_regime_state()
             logger.info(f"[Scalper Risk] Novo dia {today}: contadores zerados.")
 
     # ── Carrega estado do DB ──────────────────────────────────────────────────
@@ -54,19 +66,40 @@ class ScalperRiskManager:
             # Espelha em memória
             self._consecutive_losses = row.consecutive_losses
             self._daily_pnl_pct      = row.daily_pnl_pct
-            self._is_blocked         = row.is_blocked
-            self._block_reason       = row.block_reason or ""
             return row
 
     # ── Verifica se pode operar ───────────────────────────────────────────────
     async def can_trade(self) -> tuple[bool, str]:
-        """Limites desativados — opera todas as oportunidades."""
+        """Sempre True — nenhum limite de perda diária global."""
         await self.load_today()
         return True, ""
 
-    # ── Registra resultado de trade ───────────────────────────────────────────
-    async def record_trade(self, pnl_pct: float, won: bool) -> None:
-        """Chamado após fechar um trade."""
+    # ── V7: Retorna fator de sizing para regime ───────────────────────────────
+    def regime_sizing_multiplier(self, regime: str) -> float:
+        """
+        1.0  normal
+        0.5  após REGIME_REDUCE_AFTER perdas consecutivas
+        0.0  se pausado (REGIME_PAUSE_AFTER+ perdas)
+        """
+        losses = self._regime_losses.get(regime, 0)
+        if self._regime_paused.get(regime, False) or losses >= REGIME_PAUSE_AFTER:
+            return 0.0
+        if losses >= REGIME_REDUCE_AFTER:
+            return REGIME_REDUCE_FACTOR
+        return 1.0
+
+    # ── V7: Verifica se regime específico está pausado ────────────────────────
+    def is_regime_paused(self, regime: str) -> bool:
+        return self._regime_paused.get(regime, False) or \
+               self._regime_losses.get(regime, 0) >= REGIME_PAUSE_AFTER
+
+    # ── Registra resultado de trade (V7: circuit breaker por regime) ──────────
+    async def record_trade(self, pnl_pct: float, won: bool,
+                           regime: str | None = None) -> None:
+        """
+        Registra resultado e atualiza circuit breaker.
+        regime: "BULL" | "BEAR" | "SIDEWAYS" — para rastreio por regime.
+        """
         today = self._today()
         self._reset_if_new_day(today)
 
@@ -90,44 +123,36 @@ class ScalperRiskManager:
                 row.losing_trades       += 1
                 row.consecutive_losses  += 1
 
-            # Verifica limites após atualizar
-            if row.consecutive_losses >= MAX_CONSECUTIVE_LOSSES:
-                row.is_blocked    = True
-                row.block_reason  = f"5 perdas consecutivas ({row.consecutive_losses})"
-                logger.warning(f"[Scalper Risk] BLOQUEADO: {row.block_reason}")
-
-            if row.daily_pnl_pct <= -MAX_DAILY_LOSS_PCT:
-                row.is_blocked   = True
-                row.block_reason = f"Perda diária máxima ({row.daily_pnl_pct:.2f}%)"
-                logger.warning(f"[Scalper Risk] BLOQUEADO: {row.block_reason}")
-
             await session.commit()
 
             # Atualiza memória
             self._consecutive_losses = row.consecutive_losses
             self._daily_pnl_pct      = row.daily_pnl_pct
-            self._is_blocked         = row.is_blocked
-            self._block_reason       = row.block_reason or ""
 
-    # ── Bloqueia ──────────────────────────────────────────────────────────────
-    async def _block(self, reason: str) -> None:
-        today = self._today()
-        async with AsyncSessionLocal() as session:
-            row = await session.scalar(
-                select(ScalperRiskDaily).where(ScalperRiskDaily.date == today)
-            )
-            if row:
-                row.is_blocked   = True
-                row.block_reason = reason
-                row.updated_at   = datetime.now(timezone.utc)
-                await session.commit()
-        self._is_blocked   = True
-        self._block_reason = reason
+        # ── V7: Circuit Breaker por regime ────────────────────────────────────
+        if regime and regime in self._regime_losses:
+            if won:
+                self._regime_losses[regime] = 0
+                if self._regime_paused.get(regime, False):
+                    self._regime_paused[regime] = False
+                    logger.info(f"[Scalper Risk] Regime {regime} reativado após vitória.")
+            else:
+                self._regime_losses[regime] += 1
+                los = self._regime_losses[regime]
+                if los == REGIME_REDUCE_AFTER:
+                    logger.info(f"[Scalper Risk] Regime {regime}: {los} consecutivas → sizing 50%")
+                if los >= REGIME_PAUSE_AFTER:
+                    self._regime_paused[regime] = True
+                    logger.info(f"[Scalper Risk] Regime {regime}: {los} consecutivas → PAUSADO")
+        else:
+            # Fallback: se regime não for informado, rastreio global (legado)
+            if regime not in self._regime_losses and regime is not None:
+                logger.warning(f"[Scalper Risk] Regime {regime} desconhecido — ignorado.")
 
     # ── Status atual ─────────────────────────────────────────────────────────
     @property
     def is_blocked(self) -> bool:
-        return self._is_blocked
+        return False
 
     @property
     def consecutive_losses(self) -> int:

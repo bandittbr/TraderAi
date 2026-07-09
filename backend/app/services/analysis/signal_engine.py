@@ -1,14 +1,22 @@
 """
-TradeAI - Signal Engine V6 (Phase 8)
+TradeAI - Signal Engine V7 (Refatorado)
 Gera sinais com pesos adaptativos calculados pelo Optimizer.
 
-V6 adiciona:
+V7 (Jul/2026):
+  - Decisão por SCORE PONDERADO, não por maioria simples (7.1)
+    Antes: buy_count >= min AND buy_count > sell_count
+    Agora:  weighted_score_side >= min_weight_threshold AND
+            weighted_score_side - weighted_score_opposite >= NEUTRAL_ZONE
+  - NEUTRAL_ZONE = 10 pontos evita whiplash entre BUY/SELL
+  - Pesos individuais dos critérios finalmente importam para a decisão
+
+V6 adicionou:
   - parâmetro `weights` (dict[str, float]) com pesos por critério canônico
   - raw_score: contagem simples normalizada (V5)
   - weighted_score: soma ponderada normalizada (V6)
-  - confidence = weighted_score quando weights disponível, raw_score caso contrário
-  - NÃO altera SL, TP ou gestão de risco
-  - Totalmente backward-compatible com V5
+
+V5 original:
+  - contagem simples de critérios, sem pesos
 
 Critérios de BUY (6 técnicos + 3 estruturais + 4 SMC = 13 total):
   1. ema_bull          — EMA9  > EMA21
@@ -46,6 +54,7 @@ from app.services.optimizer.criterion_performance import CRITERION_CANONICAL
 SignalType = Literal["BUY", "SELL", "NEUTRAL"]
 
 SIGNAL_THRESHOLD = 3
+NEUTRAL_ZONE     = 10   # V7: diferença mínima de weighted_score entre BUY/SELL para decidir direção
 
 # ── Configuração por regime ───────────────────────────────────────────────────
 
@@ -91,7 +100,7 @@ class SignalResult:
     raw_score:       float     = 0.0       # score V5 (0–100, não ponderado)
     weighted_score:  float     = 0.0       # score V6 (0–100, ponderado)
     weights_used:    dict      = field(default_factory=dict)  # {canonical: weight}
-    engine_version:  str       = "V5"      # "V5" | "V6"
+    engine_version:  str       = "V5"      # "V5" | "V6" | "V7"
 
 
 # ── Engine ────────────────────────────────────────────────────────────────────
@@ -276,81 +285,166 @@ def generate_signal(
         score = min(100.0, round((met_w / max(total_w, 1.0)) * 100.0, 2))
         return score, used
 
-    # ── Determinação do sinal ─────────────────────────────────────────────────
-    if buy_count >= buy_min and buy_count > sell_count:
-        raw_s = _raw_score(buy_count)
-        if is_v6:
-            w_s, used_w = _weighted_score(buy_criteria, weights)
-            confidence  = int(round(w_s))
-        else:
-            w_s, used_w = raw_s, {}
-            confidence  = int(round(raw_s))
+    # ── Calcular scores ponderados (V6/V7) para ambos os lados ─────────────
+    buy_w_score,  buy_used  = _weighted_score(buy_criteria,  weights) if is_v6 and buy_criteria  else (0.0, {})
+    sell_w_score, sell_used = _weighted_score(sell_criteria, weights) if is_v6 and sell_criteria else (0.0, {})
 
-        reasons = list(buy_reasons)
+    # ── Determinação do sinal (V7: score ponderado; V5: contagem simples) ──
+    if is_v6 and len(weights) > 0:
+        # ── V7: Decisão por SCORE PONDERADO com NEUTRAL_ZONE ────────────────
+        engine_version = "V7"
+        buy_meets_min  = buy_count  >= buy_min
+        sell_meets_min = sell_count >= sell_min
+        buy_lead       = buy_w_score - sell_w_score
+        sell_lead      = sell_w_score - buy_w_score
+
+        if buy_meets_min and buy_lead >= NEUTRAL_ZONE:
+            raw_s = _raw_score(buy_count)
+            confidence = int(round(buy_w_score))
+            reasons = list(buy_reasons)
+            if regime_note:
+                reasons.append(regime_note)
+            reasons.append(f"[V7] weighted={buy_w_score:.1f} sell_w={sell_w_score:.1f} lead={buy_lead:.1f} raw={raw_s:.1f}")
+
+            return _apply_context_boost(SignalResult(
+                signal="BUY", confidence=min(confidence, 100),
+                reasons=reasons, criteria_met=buy_criteria,
+                raw_score=raw_s, weighted_score=buy_w_score,
+                weights_used=buy_used, engine_version=engine_version,
+            ), context)
+
+        if sell_meets_min and sell_lead >= NEUTRAL_ZONE:
+            raw_s = _raw_score(sell_count)
+            confidence = int(round(sell_w_score))
+            reasons = list(sell_reasons)
+            if regime_note:
+                reasons.append(regime_note)
+            reasons.append(f"[V7] weighted={sell_w_score:.1f} buy_w={buy_w_score:.1f} lead={sell_lead:.1f} raw={raw_s:.1f}")
+
+            return _apply_context_boost(SignalResult(
+                signal="SELL", confidence=min(confidence, 100),
+                reasons=reasons, criteria_met=sell_criteria,
+                raw_score=raw_s, weighted_score=sell_w_score,
+                weights_used=sell_used, engine_version=engine_version,
+            ), context)
+
+        # Caso só um lado atenda o mínimo, sem oposição do outro
+        if buy_meets_min and not sell_meets_min and sell_count == 0:
+            raw_s = _raw_score(buy_count)
+            confidence = int(round(buy_w_score))
+            reasons = list(buy_reasons)
+            if regime_note:
+                reasons.append(regime_note)
+            reasons.append(f"[V7] weighted={buy_w_score:.1f} (unopposed, min={buy_min})")
+
+            return _apply_context_boost(SignalResult(
+                signal="BUY", confidence=min(confidence, 100),
+                reasons=reasons, criteria_met=buy_criteria,
+                raw_score=raw_s, weighted_score=buy_w_score,
+                weights_used=buy_used, engine_version=engine_version,
+            ), context)
+
+        if sell_meets_min and not buy_meets_min and buy_count == 0:
+            raw_s = _raw_score(sell_count)
+            confidence = int(round(sell_w_score))
+            reasons = list(sell_reasons)
+            if regime_note:
+                reasons.append(regime_note)
+            reasons.append(f"[V7] weighted={sell_w_score:.1f} (unopposed, min={sell_min})")
+
+            return _apply_context_boost(SignalResult(
+                signal="SELL", confidence=min(confidence, 100),
+                reasons=reasons, criteria_met=sell_criteria,
+                raw_score=raw_s, weighted_score=sell_w_score,
+                weights_used=sell_used, engine_version=engine_version,
+            ), context)
+
+        # ── NEUTRAL (V7) ──────────────────────────────────────────────────
+        neutral_reasons = []
+        if buy_count > 0:
+            neutral_reasons.extend([f"↑ {r}" for r in buy_reasons[:2]])
+        if sell_count > 0:
+            neutral_reasons.extend([f"↓ {r}" for r in sell_reasons[:2]])
         if regime_note:
-            reasons.append(regime_note)
-        if is_v6:
-            reasons.append(f"[V6] weighted_score={w_s:.1f} raw={raw_s:.1f}")
+            neutral_reasons.append(regime_note)
+        neutral_reasons.append(f"[V7] buy_w={buy_w_score:.1f} sell_w={sell_w_score:.1f} diff={abs(buy_w_score - sell_w_score):.1f} < {NEUTRAL_ZONE}")
 
+        max_signals = max(buy_count, sell_count)
+        raw_s = _raw_score(max_signals)
         return _apply_context_boost(SignalResult(
-            signal         = "BUY",
-            confidence     = min(confidence, 100),
-            reasons        = reasons,
-            criteria_met   = buy_criteria,
-            raw_score      = raw_s,
-            weighted_score = w_s,
-            weights_used   = used_w,
-            engine_version = engine_version,
+            signal="NEUTRAL", confidence=int(round(max(buy_w_score, sell_w_score))),
+            reasons=neutral_reasons,
+            criteria_met=buy_criteria + sell_criteria,
+            raw_score=raw_s, weighted_score=max(buy_w_score, sell_w_score),
+            engine_version=engine_version,
         ), context)
 
-    if sell_count >= sell_min and sell_count > buy_count:
-        raw_s = _raw_score(sell_count)
-        if is_v6:
-            w_s, used_w = _weighted_score(sell_criteria, weights)
-            confidence  = int(round(w_s))
-        else:
-            w_s, used_w = raw_s, {}
-            confidence  = int(round(raw_s))
+    else:
+        # ── V5/V6 fallback: Decisão por CONTAGEM (backward compat) ─────────
+        if buy_count >= buy_min and buy_count > sell_count:
+            raw_s = _raw_score(buy_count)
+            if is_v6:
+                w_s, used_w = buy_w_score if buy_criteria else (0.0, {}), buy_used
+                confidence  = int(round(w_s))
+            else:
+                w_s, used_w = raw_s, {}
+                confidence  = int(round(raw_s))
 
-        reasons = list(sell_reasons)
+            reasons = list(buy_reasons)
+            if regime_note:
+                reasons.append(regime_note)
+            if is_v6:
+                reasons.append(f"[V6] weighted_score={w_s:.1f} raw={raw_s:.1f}")
+
+            return _apply_context_boost(SignalResult(
+                signal="BUY", confidence=min(confidence, 100),
+                reasons=reasons, criteria_met=buy_criteria,
+                raw_score=raw_s, weighted_score=w_s,
+                weights_used=used_w, engine_version=engine_version,
+            ), context)
+
+        if sell_count >= sell_min and sell_count > buy_count:
+            raw_s = _raw_score(sell_count)
+            if is_v6:
+                w_s, used_w = sell_w_score if sell_criteria else (0.0, {}), sell_used
+                confidence  = int(round(w_s))
+            else:
+                w_s, used_w = raw_s, {}
+                confidence  = int(round(raw_s))
+
+            reasons = list(sell_reasons)
+            if regime_note:
+                reasons.append(regime_note)
+            if is_v6:
+                reasons.append(f"[V6] weighted_score={w_s:.1f} raw={raw_s:.1f}")
+
+            return _apply_context_boost(SignalResult(
+                signal="SELL", confidence=min(confidence, 100),
+                reasons=reasons, criteria_met=sell_criteria,
+                raw_score=raw_s, weighted_score=w_s,
+                weights_used=used_w, engine_version=engine_version,
+            ), context)
+
+        # Neutral (V5/V6)
+        neutral_reasons = []
+        if buy_count > 0:
+            neutral_reasons.extend([f"↑ {r}" for r in buy_reasons[:2]])
+        if sell_count > 0:
+            neutral_reasons.extend([f"↓ {r}" for r in sell_reasons[:2]])
         if regime_note:
-            reasons.append(regime_note)
-        if is_v6:
-            reasons.append(f"[V6] weighted_score={w_s:.1f} raw={raw_s:.1f}")
+            neutral_reasons.append(regime_note)
+
+        max_signals = max(buy_count, sell_count)
+        raw_s = _raw_score(max_signals)
+        confidence = int(round(raw_s))
 
         return _apply_context_boost(SignalResult(
-            signal         = "SELL",
-            confidence     = min(confidence, 100),
-            reasons        = reasons,
-            criteria_met   = sell_criteria,
-            raw_score      = raw_s,
-            weighted_score = w_s,
-            weights_used   = used_w,
-            engine_version = engine_version,
+            signal="NEUTRAL", confidence=confidence,
+            reasons=neutral_reasons,
+            criteria_met=buy_criteria + sell_criteria,
+            raw_score=raw_s, weighted_score=raw_s,
+            engine_version=engine_version,
         ), context)
-
-    # Neutral
-    neutral_reasons = []
-    if buy_count > 0:
-        neutral_reasons.extend([f"↑ {r}" for r in buy_reasons[:2]])
-    if sell_count > 0:
-        neutral_reasons.extend([f"↓ {r}" for r in sell_reasons[:2]])
-    if regime_note:
-        neutral_reasons.append(regime_note)
-
-    max_signals = max(buy_count, sell_count)
-    raw_s = _raw_score(max_signals)
-    confidence = int(round(raw_s))
-
-    return _apply_context_boost(SignalResult(
-        signal         = "NEUTRAL",
-        confidence     = confidence,
-        reasons        = neutral_reasons,
-        criteria_met   = buy_criteria + sell_criteria,
-        raw_score      = raw_s,
-        weighted_score = raw_s,
-        engine_version = engine_version,
-    ), context)
 
 
 def _get_regime_key(regime) -> str:

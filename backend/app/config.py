@@ -56,10 +56,10 @@ class Settings(BaseSettings):
     paper_stop_loss_percent:  float = 2.0    # % abaixo do entry (hard SL)
     paper_take_profit_percent: float = 4.0   # % acima do entry (TP2 / full close)
 
-    # ── Trade Management Engine (Fase 12) ─────────────────────────────────────
+    # ── Trade Management Engine (Fase 12 / V7) ────────────────────────────────
     paper_max_hours_open:         float = 48.0   # Time Stop: fechar após N horas
-    paper_break_even_trigger_pct: float = 1.5    # % lucro para mover stop ao entry
-    paper_trailing_start_pct:     float = 2.0    # % lucro para ativar trailing stop
+    paper_break_even_trigger_pct: float = 1.0    # V7: 1.0% (antes 1.5%) — protege capital mais cedo
+    paper_trailing_start_pct:     float = 2.5    # V7: 2.5% (antes 2.0%) — após TP1 (2.0%), evita overlap
     paper_trailing_distance_pct:  float = 1.0    # % de distância do trailing stop
     paper_tp1_pct:                float = 2.0    # % lucro para saída parcial 50% (TP1)
     paper_exit_score_threshold:   float = 30.0   # Exit Score abaixo disso → fechar

@@ -21,6 +21,9 @@ build/
 .env.local
 .env.*.local
 
+# ── OpenWork/OpenCode config (contém API keys) ────────────────────────────────
+.config/
+
 # ── Banco de dados (gerado em runtime) ───────────────────────────────────────
 backend/data/*.db
 backend/data/*.db-shm

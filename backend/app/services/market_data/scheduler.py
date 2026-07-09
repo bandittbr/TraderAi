@@ -329,8 +329,10 @@ async def _process_signal_for_paper_trading(symbol: str, tf: str, ind) -> None:
         except Exception as _smce:
             logger.debug("[phase7] smc skip: %s", _smce)
 
-        # Phase 8: Carregar pesos adaptativos (V6 — graceful degradation)
-        weights = _cached_weights if _cached_weights else None
+        # Phase 8 / V7: Pesos adaptativos por regime (fallback GLOBAL)
+        regime_raw   = getattr(regime_result, 'regime', None)
+        regime_label = regime_raw.value if hasattr(regime_raw, 'value') else str(regime_raw or "GLOBAL")
+        weights      = _resolve_weights_for_regime(regime_label)
 
         # Analise e Sinal V6 (regime + structure + SMC + weights)
         analysis = analyze(ind, price, context=context)
@@ -420,23 +422,48 @@ async def start_background_tasks() -> list:
 OPTIMIZER_SYNC_INTERVAL_SECS = 21600   # 6 horas
 
 # Cache de pesos em memória (recarregado a cada ciclo do optimizer)
-_cached_weights: dict = {}
+# V7: {regime: {criterion: weight}} — permite selecionar por regime
+_cached_regime_weights: dict[str, dict[str, float]] = {}
+_cached_weights_fallback: dict[str, float] = {}   # GLOBAL fallback
 _weights_version: int = 0
 
 
 async def _load_optimizer_weights() -> dict:
-    """Carrega pesos adaptativos do banco (Phase 8)."""
-    global _cached_weights, _weights_version
+    """Carrega pesos adaptativos do banco (Phase 8 / V7: por regime)."""
+    global _cached_regime_weights, _cached_weights_fallback, _weights_version
     try:
         from app.services.optimizer.weight_engine import weight_engine
-        weights = await weight_engine.load_weights()
-        _cached_weights  = weights
+        regime_weights = await weight_engine.load_all_regime_weights()
+        _cached_regime_weights  = regime_weights
+        _cached_weights_fallback = regime_weights.get("GLOBAL", {})
         _weights_version += 1
-        logger.info("[phase8] Pesos adaptativos carregados (%d critérios)", len(weights))
-        return weights
+        n_regimes = len(regime_weights)
+        n_total   = sum(len(w) for w in regime_weights.values())
+        logger.info("[phase8] Pesos V7 carregados: %d regimes, %d critérios total", n_regimes, n_total)
+        return _cached_weights_fallback
     except Exception as e:
         logger.debug("[phase8] weight load skip: %s", e)
+        _cached_regime_weights = {}
+        _cached_weights_fallback = {}
         return {}
+
+
+def _resolve_weights_for_regime(regime_value: str) -> dict[str, float] | None:
+    """
+    V7: Retorna os pesos apropriados para o regime dado.
+    Busca no cache por regime; fallback para GLOBAL.
+    """
+    if not _cached_regime_weights:
+        return _cached_weights_fallback or None
+    # Tenta o regime exato (ex: "BULL", "BEAR", "HIGH_VOLATILITY")
+    regime_key = str(regime_value)
+    if regime_key in _cached_regime_weights:
+        return _cached_regime_weights[regime_key]
+    # UNKNOWN fallback para SIDEWAYS
+    if regime_key == "UNKNOWN" and "SIDEWAYS" in _cached_regime_weights:
+        return _cached_regime_weights["SIDEWAYS"]
+    # Fallback para GLOBAL
+    return _cached_regime_weights.get("GLOBAL", _cached_weights_fallback) or None
 
 
 async def optimizer_sync_loop() -> None:

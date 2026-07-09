@@ -5,24 +5,31 @@ Tabelas: criterion_weights, optimization_snapshots
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, UniqueConstraint, func
 from app.database import Base
 
 
 class CriterionWeight(Base):
     """
-    Peso adaptativo para cada critério canônico.
+    Peso adaptativo para cada critério canônico por regime de mercado.
+    V7: regime separa conjuntos de pesos (GLOBAL, BULL, BEAR, SIDEWAYS, HIGH_VOL).
     Atualizado pelo DynamicWeightEngine a cada ciclo de otimização.
     """
     __tablename__ = "criterion_weights"
 
     id         = Column(Integer, primary_key=True, index=True)
-    criterion  = Column(String(40), nullable=False, unique=True, index=True)
+    regime     = Column(String(20), nullable=False, default="GLOBAL", index=True)  # V7
+    criterion  = Column(String(40), nullable=False, index=True)
     weight     = Column(Float, nullable=False, default=10.0)  # 1.0 – 20.0
     updated_at = Column(DateTime, nullable=False, default=func.now())
 
+    __table_args__ = (
+        # V7: unique por regime + criterion (antes era só criterion)
+        UniqueConstraint('regime', 'criterion', name='uq_regime_criterion'),
+    )
+
     def __repr__(self) -> str:
-        return f"<CriterionWeight {self.criterion}={self.weight:.2f}>"
+        return f"<CriterionWeight {self.regime}/{self.criterion}={self.weight:.2f}>"
 
 
 class OptimizationSnapshot(Base):
