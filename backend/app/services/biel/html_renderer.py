@@ -4,6 +4,7 @@ Usa Playwright (Chromium headless) para renderizar templates HTML
 em imagens PNG 1080x1350 de alta qualidade.
 """
 
+import base64
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -13,8 +14,11 @@ logger = get_logger(__name__)
 
 # ── Caminhos ──
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+ASSETS_DIR = TEMPLATES_DIR / "assets"
 OUTPUT_DIR = Path("data/biel_images")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+_asset_cache: dict = {}
 
 
 def _load_template(name: str) -> str:
@@ -23,6 +27,24 @@ def _load_template(name: str) -> str:
     if not path.exists():
         raise FileNotFoundError(f"Template não encontrado: {path}")
     return path.read_text(encoding="utf-8")
+
+
+def _load_asset_b64(filename: str, mime: str = "image/png") -> str:
+    """
+    Carrega um asset estático (ex: imagem de fundo) de templates/assets/
+    como data URI base64, com cache em memória (evita reler/reencodar
+    a cada post gerado). Necessário porque page.set_content() do Playwright
+    não tem base_url para resolver caminhos relativos de imagem.
+    """
+    if filename not in _asset_cache:
+        path = ASSETS_DIR / filename
+        if not path.exists():
+            logger.warning(f"[biel/html] Asset não encontrado: {path}")
+            _asset_cache[filename] = ""
+        else:
+            data = path.read_bytes()
+            _asset_cache[filename] = f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+    return _asset_cache[filename]
 
 
 def _fmt_number(value: float) -> str:
@@ -194,9 +216,8 @@ def fill_market_template(ctx: dict) -> str:
 
     date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
 
-    # Sparkline SVG
-    prices = ctx.get("btc_price_history", [])
-    sparkline_svg = _generate_sparkline_svg(prices)
+    # Background — arte fixa (mapa-múndi + linha de alta), fornecida pelo usuário.
+    bg_image = _load_asset_b64("market_bg.png")
 
     replacements = {
         "{{DATA_ATUAL}}": date_str,
@@ -208,7 +229,7 @@ def fill_market_template(ctx: dict) -> str:
         "{{SENTIMENTO}}": sentimento,
         "{{SENTIMENTO_CLASS}}": sentimento_class,
         "{{SENTIMENTO_ICON}}": sentimento_icon,
-        "{{SPARKLINE_SVG}}": sparkline_svg,
+        "{{BG_IMAGE}}": bg_image,
     }
 
     for var, val in replacements.items():
@@ -397,27 +418,4 @@ def render_sync(html: str, topic: str = "market") -> str:
     except Exception as e:
         logger.error(f"[biel/html] Playwright falhou: {e}")
         logger.info("[biel/html] Usando fallback PIL...")
-        return _generate_fallback_image(topic)
-
-
-_FALLBACK_TITLES = {
-    "market": "MERCADO EM MOVIMENTO",
-    "trade": "IDEIA DE TRADE",
-    "insight": "INSIGHT AI",
-    "news": "NOTÍCIA TRADER AI",
-}
-
-
-def _generate_fallback_image(topic: str = "market") -> str:
-    """Fallback PIL simples (sem dados) caso o Playwright falhe."""
-    from PIL import Image, ImageDraw
-
-    img = Image.new("RGB", (1080, 1350), (10, 15, 13))
-    draw = ImageDraw.Draw(img)
-    draw.text((100, 100), _FALLBACK_TITLES.get(topic, "TRADER AI"), fill=(0, 255, 65))
-    draw.text((100, 200), "Renderização indisponível no momento", fill=(255, 255, 255))
-    filename = f"{topic}_fallback_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.png"
-    path = str(OUTPUT_DIR / filename)
-    img.save(path)
-    logger.warning(f"[biel/html] Fallback PIL salvo: {path}")
-    return path
+     
