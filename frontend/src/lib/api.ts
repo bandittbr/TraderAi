@@ -202,3 +202,17 @@ export async function getContextScore(symbol: string): Promise<ContextScoreData 
     return await fetchJSON<ContextScoreData>(`/context/score?symbol=${symbol}`);
   } catch { return null; }
 }
+
+// ── Analytics — Signal History (Fase 6) ───────────────────────────────────────
+
+import type { SignalHistoryListResponse } from "@/types";
+
+export async function getSignalHistory(
+  symbol?: string, period_days = 7, limit = 20,
+): Promise<SignalHistoryListResponse | null> {
+  try {
+    const params = new URLSearchParams({ period_days: String(period_days), limit: String(limit) });
+    if (symbol) params.set("symbol", symbol);
+    return await fetchJSON<SignalHistoryListResponse>(`/analytics/signals?${params.toString()}`);
+  } catch { return null; }
+}
