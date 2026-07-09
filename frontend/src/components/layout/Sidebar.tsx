@@ -66,7 +66,7 @@ const ICON_MAP: Record<string, string> = {
   chart: "◈",
   paper: "◎",
   trade: "◉",
-  scalp: "⚡",
+  scalp: "⚡︎",   // lightning bolt with text variant (monochrome)
   workr: "⚙",
   analy: "▲",
   alpha: "◆",
