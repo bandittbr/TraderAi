@@ -26,9 +26,15 @@ const NAV_ITEMS: NavGroup[] = [
     group: "TRADING",
     items: [
       { label: "Dashboard",     icon: "chart", href: "/dashboard",        external: false },
-      { label: "Paper Trading", icon: "paper", href: "/paper-trading",    external: false },
       { label: "Trade Mgmt",   icon: "trade", href: "/trade-management", external: false },
-      { label: "Scalper",      icon: "scalp", href: "/scalper",          external: false },
+    ],
+  },
+  {
+    group: "TRADERS AGENTS",
+    items: [
+      { label: "Paper",    icon: "paper", href: "/paper-trading", external: false },
+      { label: "Scalper",  icon: "scalp", href: "/scalper",       external: false },
+      { label: "Worker",   icon: "workr", href: "/worker",        external: false },
     ],
   },
   {
@@ -61,6 +67,7 @@ const ICON_MAP: Record<string, string> = {
   paper: "◎",
   trade: "◉",
   scalp: "⚡",
+  workr: "⚙",
   analy: "▲",
   alpha: "◆",
   robus: "◇",

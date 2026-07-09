@@ -20,6 +20,7 @@ import { useWebSocket }                   from "@/hooks/useWebSocket";
 import { useMarketData }                  from "@/hooks/useMarketData";
 import { useIndicators }                  from "@/hooks/useIndicators";
 import { StrategyPerformance }            from "@/components/dashboard/StrategyPerformance";
+import AgentesAI                          from "@/components/dashboard/AgentesAI";
 import { Badge }                          from "@/components/ui/Badge";
 import { clsx }                           from "clsx";
 import { getPaperStats, getNews, getFearGreed, getFundingRates, getOpenInterest, getContextScore } from "@/lib/api";
@@ -247,6 +248,9 @@ export default function DashboardPage() {
 
         {/* Gráfico candlestick */}
         <MarketChart symbol={activeSymbol} livePrice={livePrice} />
+
+        {/* V7 — AGENTES AI: Leaderboard comparativo */}
+        <AgentesAI />
 
         {/* Indicadores Técnicos (full width) */}
         <TechnicalIndicators

@@ -377,6 +377,25 @@ async def _process_signal_for_paper_trading(symbol: str, tf: str, ind) -> None:
             smc        = smc,
         ))
 
+        # V7 — Worker Agent 24/7 (quando timeframe = 1h)
+        if tf == "1h":
+            try:
+                from app.services.worker.trade_engine import worker_engine
+                # Worker usa 1h para direção + tenta 15m para entrada
+                price_15m = None
+                try:
+                    from app.services.market_data.store import store as _mstore
+                    price_15m = await _mstore.get_indicator_15m(symbol)
+                except Exception:
+                    pass
+                await worker_engine.process_signal(
+                    symbol=symbol, price_1h=ind, price_15m=price_15m or ind,
+                    regime=regime_result, context=context,
+                    structure=structure, smc=smc, weights=weights,
+                )
+            except Exception as _we:
+                logger.debug("[worker] skip: %s", _we)
+
         struct_label = structure.structure_label if structure else "N/A"
         liq_score    = smc.liquidity_score if smc else 0
         logger.debug(
