@@ -6,6 +6,7 @@ Inclui dados enriquecidos para os 4 temas (market, trade, insight, news).
 
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, desc
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.paper_trading import PaperAccount, PaperTrade
 from app.models.market import MarketCandle, MarketStat
@@ -66,6 +67,50 @@ async def build_context() -> dict:
             ctx["win_rate_recente"] = round(wins / len(trades) * 100) if trades else 0
         except Exception as e:
             logger.warning(f"[biel/context] Trades: {e}")
+
+        # ── Ideia de trade (modelo TRADE) ───────────────────────────────────
+        # PaperTrade não guarda tp1/tp2/sl como colunas — são calculados em
+        # runtime pelo trade_engine a partir dos percentuais reais de config.
+        # Usa a posição aberta mais recente; se não houver, cai para a última
+        # fechada (mesma fórmula, apenas ilustrativa sobre um trade já feito).
+        try:
+            result = await session.execute(
+                select(PaperTrade)
+                .where(PaperTrade.status == "open")
+                .order_by(desc(PaperTrade.opened_at))
+                .limit(1)
+            )
+            base_trade = result.scalar_one_or_none()
+            is_open = base_trade is not None
+            if base_trade is None and trades:
+                base_trade = trades[0]
+
+            if base_trade is not None:
+                entry = base_trade.entry_price
+                side = (base_trade.trade_side or "LONG").upper()
+                sign = 1 if side == "LONG" else -1
+
+                tp1 = entry * (1 + sign * settings.paper_tp1_pct / 100)
+                tp2 = entry * (1 + sign * settings.paper_take_profit_percent / 100)
+                sl  = entry * (1 - sign * settings.paper_stop_loss_percent / 100)
+
+                risk = abs(entry - sl)
+                reward = abs(tp2 - entry)
+                rr = reward / risk if risk > 0 else 0
+
+                ctx["trade_idea"] = {
+                    "symbol": base_trade.symbol,
+                    "side": side,
+                    "entry": round(entry, 2),
+                    "tp1": round(tp1, 2),
+                    "tp2": round(tp2, 2),
+                    "sl": round(sl, 2),
+                    "rr": round(rr, 1),
+                    "confidence": round(base_trade.confidence or 70, 0),
+                    "is_open": is_open,
+                }
+        except Exception as e:
+            logger.warning(f"[biel/context] Trade idea: {e}")
 
         # ── Regime de mercado ──────────────────────────────────────────────
         try:

@@ -400,4 +400,48 @@ next-env.d.ts
 
 ---
 
-*Revisão gerada em 06/07/2026. Correções aplicadas automaticamente.*
+## 🆕 ATUALIZAÇÃO — 09/07/2026 (mudanças aplicadas via OpenCode)
+
+> Entre 08/07 21:43 e 23:35 o OpenCode implementou e commitou todo o roteiro pendente do `METRICAS-PARA-TRADE.MD` e um terceiro agente de trading (Worker). Commits: `35e437d`, `0b8459d`, `c2d323a`, `b378ddd`, `42975e1`.
+
+### ✅ Já registrado em outro lugar
+
+- **V7 completo (itens 7.1–7.11)** — score ponderado, SL ATR-adaptativo, sizing por confiança, OBV, circuit breaker por regime, pesos por regime, validação estatística (`statistical_validator.py`), métricas de qualidade do sinal e modelagem de comissões. Tudo commitado. Documentado em `METRICAS-PARA-TRADE.MD`, **mas as seções 7 e 8 desse arquivo ainda marcam 7.6/7.9/7.11 como "pendentes" — desatualizado, precisa sincronizar as seções "Próximas Alta Prioridade" e "Roteiro" com o que já foi implementado.**
+- **Agente Worker** (swing trading 1h+15m, score multi-módulo, alavancagem adaptativa 1x–3x) — implementado (`b378ddd`) e documentado em `AGENTES.MD` (arquivo novo, ainda **não commitado**).
+
+### 26. 🟡 Agente Worker nunca passou por pente-fino
+
+**Arquivos:** `backend/app/services/worker/{signal_engine,trade_engine,risk_manager}.py` (~835 linhas novas), `backend/app/api/endpoints/worker.py`, `backend/app/models/worker.py`
+
+**Problema:** Terceiro motor de trading completo, criado depois da revisão original de 06/07. Opera alavancagem adaptativa (1x–3x) e saldo simulado — mesma classe de risco do Scalper/Paper, que já foram revisados. Ainda sem auditoria de segurança/duplicação/consistência.
+
+**Ação sugerida:** Revisão dedicada (mesmo escopo deste documento) antes de considerar o Worker pronto para uso contínuo.
+
+### 27. 🔵 Novos diretórios fora do `.gitignore`
+
+**Pastas:** `data/`, `logs/`, `backend/data/biel_images/` (raiz do projeto, atualmente untracked)
+
+**Problema:** `.gitignore` só cobre `backend/data/*.db` e `backend/logs/`. Os equivalentes na raiz (`data/`, `logs/`) e a pasta de imagens geradas pelo Biel não estão cobertos — risco de commitar banco/logs/binários por engano.
+
+**Correção:**
+```
+/data/
+/logs/
+backend/data/biel_images/
+```
+
+### 28. 🔵 `next-env.d.ts` e `tsconfig.tsbuildinfo` continuam rastreados
+
+**Problema:** O item #15 foi marcado "✅ Adicionados ao .gitignore", mas os arquivos já estavam versionados antes da regra existir — `.gitignore` não destrackeia retroativamente. Continuam aparecendo como modificados a cada build.
+
+**Correção:** `git rm --cached frontend/next-env.d.ts frontend/tsconfig.tsbuildinfo`
+
+### 29. ⚪ Refatoração do Biel em andamento, não commitada
+
+**Arquivos:** `backend/app/services/biel/visual_generator.py` (reescrita, ~728 linhas alteradas), `backend/app/services/biel/html_renderer.py` (novo), `backend/app/services/biel/templates/` (novo)
+
+**Status:** Trabalho em progresso, sem relação com o motor de trading. Não bloqueia nada — apenas registrado aqui para não se perder.
+
+---
+
+*Revisão gerada em 06/07/2026. Correções aplicadas automaticamente. Atualizado em 09/07/2026 com mudanças commitadas via OpenCode.*

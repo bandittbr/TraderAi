@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1080px;
+    height: 1350px;
+    background: #08050d;
+    color: #ffffff;
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 60px 70px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #100a1a 0%, #08050d 40%, #050308 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(100,50,180,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(100,50,180,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .bg-glow {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 600px 400px at 50% 20%, rgba(100,50,180,0.08) 0%, transparent 70%),
+      radial-gradient(ellipse 400px 300px at 85% 55%, rgba(100,50,180,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .decor-line {
+    position: absolute;
+    left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent 5%, rgba(100,50,180,0.14) 20%, rgba(100,50,180,0.14) 80%, transparent 95%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 26px;
+    position: relative;
+    z-index: 1;
+  }
+  .logo { display: flex; align-items: baseline; gap: 6px; }
+  .logo-icon { font-size: 28px; margin-right: 4px; filter: drop-shadow(0 0 8px rgba(140,80,210,0.4)); }
+  .logo-trader { font-weight: 700; font-size: 34px; color: #ffffff; letter-spacing: -0.5px; }
+  .logo-ai { font-weight: 700; font-size: 34px; color: #8C52D2; text-shadow: 0 0 12px rgba(140,80,210,0.3); }
+  .date { font-weight: 600; font-size: 20px; color: rgba(255,255,255,0.5); letter-spacing: 0.5px; }
+
+  /* ── TAG ── */
+  .tag {
+    display: inline-block;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 1px;
+    color: #A78BFA;
+    background: rgba(140,80,210,0.18);
+    border: 1.5px solid rgba(140,80,210,0.4);
+    border-radius: 8px;
+    padding: 9px 20px;
+    margin-bottom: 22px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── HEADLINE ── */
+  .headline {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 44px;
+    line-height: 1.18;
+    color: #ffffff;
+    letter-spacing: 0px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
+  }
+  .summary {
+    font-weight: 400;
+    font-size: 22px;
+    line-height: 1.55;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 26px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── ILLUSTRATION ── */
+  .illustration {
+    position: relative;
+    z-index: 1;
+    border: 1.5px solid rgba(140,80,210,0.15);
+    border-radius: 18px;
+    background: rgba(24, 16, 38, 0.6);
+    height: 400px;
+    margin-bottom: 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .illustration-glow {
+    position: absolute;
+    width: 340px; height: 340px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(140,80,210,0.35) 0%, transparent 70%);
+    filter: blur(10px);
+  }
+  .illustration-icon {
+    width: 150px;
+    height: 150px;
+    filter: drop-shadow(0 0 30px rgba(140,80,210,0.5));
+    position: relative;
+    z-index: 1;
+  }
+  .illustration-symbol {
+    font-weight: 800;
+    font-size: 34px;
+    color: #ffffff;
+    margin-top: 14px;
+    letter-spacing: 2px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── METADATA ── */
+  .meta-box {
+    border: 1.5px solid rgba(140,80,210,0.25);
+    border-radius: 18px;
+    background: rgba(24, 16, 38, 0.65);
+    padding: 28px 34px;
+    position: relative;
+    z-index: 1;
+    margin-bottom: 8px;
+  }
+  .meta-cols { display: flex; gap: 36px; }
+  .meta-col-left { flex: 1.4; }
+  .meta-col-right { flex: 1; border-left: 1.5px solid rgba(255,255,255,0.08); padding-left: 32px; }
+  .meta-label { font-size: 16px; font-weight: 700; letter-spacing: 1px; color: rgba(255,255,255,0.5); margin-bottom: 16px; }
+  .impact-line { display: flex; justify-content: space-between; font-size: 20px; margin-bottom: 12px; }
+  .impact-line:last-child { margin-bottom: 0; }
+  .impact-line .il-label { color: rgba(255,255,255,0.6); font-weight: 500; }
+  .impact-line .il-value { color: #A78BFA; font-weight: 800; }
+  .source-value { font-size: 25px; font-weight: 800; color: #ffffff; }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    font-weight: 700;
+    font-size: 19px;
+    color: #A78BFA;
+    letter-spacing: 1px;
+    padding-top: 26px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: auto;
+    position: relative;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <div class="decor-line" style="top: 1150px;"></div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <span class="logo-icon">◆</span>
+      <span class="logo-trader">TRADER</span>
+      <span class="logo-ai">AI</span>
+    </div>
+    <span class="date">{{DATA_ATUAL}}</span>
+  </div>
+
+  <!-- TAG -->
+  <div class="tag">NOTÍCIA</div>
+
+  <!-- HEADLINE -->
+  <div class="headline">{{HEADLINE}}</div>
+  <div class="summary">{{SUMMARY}}</div>
+
+  <!-- ILLUSTRATION -->
+  <div class="illustration">
+    <div class="illustration-glow"></div>
+    <div class="illustration-icon">{{GEM_SVG}}</div>
+    <div class="illustration-symbol">{{SYMBOL}}</div>
+  </div>
+
+  <!-- METADATA -->
+  <div class="meta-box">
+    <div class="meta-cols">
+      <div class="meta-col-left">
+        <div class="meta-label">IMPACTO NO MERCADO</div>
+        <div class="impact-line"><span class="il-label">{{IMPACT_1_LABEL}}</span><span class="il-value">{{IMPACT_1_VALUE}}</span></div>
+        <div class="impact-line"><span class="il-label">{{IMPACT_2_LABEL}}</span><span class="il-value">{{IMPACT_2_VALUE}}</span></div>
+        <div class="impact-line"><span class="il-label">{{IMPACT_3_LABEL}}</span><span class="il-value">{{IMPACT_3_VALUE}}</span></div>
+      </div>
+      <div class="meta-col-right">
+        <div class="meta-label">FONTE</div>
+        <div class="source-value">{{SOURCE}} ↗</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">INFORMAÇÃO QUE MOVE O MERCADO</div>
+
+</body>
+</html>

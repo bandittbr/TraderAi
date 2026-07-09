@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1080px;
+    height: 1350px;
+    background: #060a08;
+    color: #ffffff;
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 60px 70px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── BACKGROUND MULTI-LAYER ── */
+  body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    /* Camada 1: gradiente base (mais escuro embaixo) */
+    background: linear-gradient(180deg, #0a100d 0%, #060a08 40%, #040706 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .bg-grid {
+    position: absolute;
+    inset: 0;
+    /* Camada 2: grid de trading */
+    background-image:
+      linear-gradient(rgba(0,255,65,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,65,0.025) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .bg-glow {
+    position: absolute;
+    inset: 0;
+    /* Camada 3: glow radial no topo */
+    background:
+      radial-gradient(ellipse 600px 400px at 50% 25%, rgba(0,255,65,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 400px 300px at 80% 60%, rgba(0,255,65,0.03) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .bg-dots {
+    position: absolute;
+    inset: 0;
+    /* Camada 4: partículas/dots sutis */
+    background-image: radial-gradient(rgba(0,255,65,0.08) 1px, transparent 1px);
+    background-size: 120px 120px;
+    background-position: 30px 30px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Linhas decorativas ── */
+  .decor-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 5%, rgba(0,255,65,0.10) 20%, rgba(0,255,65,0.10) 80%, transparent 95%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    position: relative;
+    z-index: 1;
+  }
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .logo-icon {
+    font-size: 28px;
+    margin-right: 4px;
+    filter: drop-shadow(0 0 8px rgba(0,255,65,0.4));
+  }
+  .logo-trader {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 34px;
+    color: #ffffff;
+    letter-spacing: -0.5px;
+  }
+  .logo-ai {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 34px;
+    color: #00ff41;
+    text-shadow: 0 0 12px rgba(0,255,65,0.3);
+  }
+  .date {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.5px;
+  }
+
+  /* ── TITLE ── */
+  .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 80px;
+    line-height: 0.95;
+    margin-top: 20px;
+    letter-spacing: 1px;
+    position: relative;
+    z-index: 1;
+  }
+  .title .line-1 { color: #ffffff; display: block; }
+  .title .line-2 { color: #00ff41; display: block; text-shadow: 0 0 30px rgba(0,255,65,0.2); }
+  .subtitle {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: 26px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 12px;
+    margin-bottom: 25px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── SPARKLINE CHART ── */
+  .chart-area {
+    position: relative;
+    z-index: 1;
+    border: 1.5px solid rgba(0, 255, 65, 0.10);
+    border-radius: 16px;
+    background: rgba(10, 18, 15, 0.6);
+    padding: 15px;
+    margin-bottom: 30px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 25px rgba(0,255,65,0.03), inset 0 0 25px rgba(0,255,65,0.02);
+  }
+  .chart-area svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ── PRICE CARD ── */
+  .price-card {
+    border: 1.5px solid rgba(0, 255, 65, 0.15);
+    border-radius: 16px;
+    background: rgba(14, 22, 20, 0.8);
+    padding: 30px 40px;
+    margin-bottom: 30px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 0 20px rgba(0,255,65,0.04), inset 0 0 20px rgba(0,255,65,0.02);
+  }
+  .price-label {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: 22px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .price-icon {
+    font-size: 20px;
+    opacity: 0.6;
+  }
+  .price-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .price-value {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 74px;
+    color: #ffffff;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  .price-change {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    color: #00ff41;
+  }
+  .price-change.negative { color: #ff4444; }
+
+  /* ── 3-COLUMN GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    flex: 1;
+    position: relative;
+    z-index: 1;
+  }
+  .card {
+    border: 1.5px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    background: rgba(14, 22, 20, 0.5);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .card-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    opacity: 0.7;
+    filter: drop-shadow(0 0 6px rgba(0,255,65,0.2));
+  }
+  .card-icon.green  { color: #00ff41; }
+  .card-icon.red    { color: #ff4444; }
+  .card-icon.orange { color: #ff9500; }
+  .card-icon.white  { color: rgba(255,255,255,0.6); }
+  .card-label {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: 18px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 10px;
+    letter-spacing: 0.3px;
+  }
+  .card-value {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 44px;
+    color: #ffffff;
+  }
+  .card-value.green  { color: #00ff41; }
+  .card-value.red    { color: #ff4444; }
+  .card-value.orange { color: #ff9500; }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    font-size: 18px;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 2px;
+    padding-top: 35px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: auto;
+    position: relative;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+
+  <!-- BACKGROUND LAYERS -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <div class="bg-dots"></div>
+
+  <!-- DECOR LINES -->
+  <div class="decor-line" style="top: 130px;"></div>
+  <div class="decor-line" style="top: 310px;"></div>
+  <div class="decor-line" style="top: 580px;"></div>
+  <div class="decor-line" style="top: 850px;"></div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <span class="logo-icon">◆</span>
+      <span class="logo-trader">TRADER</span>
+      <span class="logo-ai">AI</span>
+    </div>
+    <span class="date">{{DATA_ATUAL}}</span>
+  </div>
+
+  <!-- TITLE -->
+  <div class="title"><span class="line-1">MERCADO</span><span class="line-2">EM MOVIMENTO</span></div>
+  <div class="subtitle">Panorama completo do mercado em tempo real.</div>
+
+  <!-- SPARKLINE CHART -->
+  <div class="chart-area">
+    {{SPARKLINE_SVG}}
+  </div>
+
+  <!-- PRICE -->
+  <div class="price-card">
+    <div class="price-label">
+      <span class="price-icon">₿</span> BTC/USDT
+    </div>
+    <div class="price-row">
+      <span class="price-value">{{PRECO_BTC}}</span>
+      <span class="price-change {{CHANGE_CLASS}}">{{PORCENTAGEM_BTC}}</span>
+    </div>
+  </div>
+
+  <!-- 3-COLUMN METRICS -->
+  <div class="grid">
+    <div class="card">
+      <div class="card-icon green">◈</div>
+      <div class="card-label">DOMÍNIO BTC</div>
+      <div class="card-value green">{{DOMINIO}}</div>
+    </div>
+    <div class="card">
+      <div class="card-icon white">◉</div>
+      <div class="card-label">VOLUME 24H</div>
+      <div class="card-value">{{VOLUME}}</div>
+    </div>
+    <div class="card">
+      <div class="card-icon {{SENTIMENTO_CLASS}}">{{SENTIMENTO_ICON}}</div>
+      <div class="card-label">SENTIMENTO</div>
+      <div class="card-value {{SENTIMENTO_CLASS}}">{{SENTIMENTO}}</div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">DADOS EM TEMPO REAL • ANÁLISE • ESTRATÉGIA</div>
+
+</body>
+</html>
