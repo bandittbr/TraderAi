@@ -80,3 +80,9 @@ class Settings(BaseSettings):
 
 # Instância singleton das configurações — importar de qualquer módulo
 settings = Settings()
+
+# Log qual banco está ativo (sem expor credenciais)
+if "postgresql" in settings.database_url:
+    print("[config] ✅ PostgreSQL ativo (asyncpg)")
+else:
+    print(f"[config] ⚠️  SQLite ativo: {settings.database_url}")
