@@ -24,6 +24,14 @@ def _ensure_db_dir() -> None:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 
+# ── Normaliza DATABASE_URL ────────────────────────────────────────────────────
+# Railway injeta DATABASE_URL como "postgresql://..." (sem +asyncpg).
+# O SQLAlchemy async precisa de "postgresql+asyncpg://...".
+_db_url = settings.database_url
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    logger.info("DATABASE_URL convertida de postgresql:// para postgresql+asyncpg://")
+
 # ── Configurações de conexão ──────────────────────────────────────────────────
 _connect_args = {}
 if not settings.is_postgres:
@@ -33,7 +41,7 @@ if not settings.is_postgres:
 
 # ── Engine assíncrono ──────────────────────────────────────────────────────────
 engine = create_async_engine(
-    settings.database_url,
+    _db_url,
     echo=settings.is_development,      # Loga as queries SQL em modo desenvolvimento
     connect_args=_connect_args,
 )
