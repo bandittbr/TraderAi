@@ -312,7 +312,11 @@ def fill_insight_template(ctx: dict) -> str:
 
     date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
 
+    # Background — insightbk.png personalizado
+    bg_image = _load_asset_b64("insightbk.png")
+
     replacements = {
+        "{{BG_IMAGE}}": bg_image,
         "{{DATA_ATUAL}}": date_str,
         "{{QUESTION}}": question,
         "{{AI_SUMMARY}}": ai_summary,
@@ -449,8 +453,9 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
             # ── Background ─────────────────────────────────────────────
             # Mapa de imagens de fundo por tópico
             bg_files = {
-                "market": ASSETS_DIR / "mercadobk.png",
-                "trade":  ASSETS_DIR / "tradebk.png",
+                "market":  ASSETS_DIR / "mercadobk.png",
+                "trade":   ASSETS_DIR / "tradebk.png",
+                "insight": ASSETS_DIR / "insightbk.png",
             }
             bg_path = bg_files.get(topic)
 
