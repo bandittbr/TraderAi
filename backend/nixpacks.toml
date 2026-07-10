@@ -1,4 +1,8 @@
 [phases.setup]
+# nixPkgs custom soma ao setup auto-detectado (que já traz python3 +
+# gcc), mas o python3 puro do nixpkgs não inclui pip — sem isso o comando
+# "pip install" da fase seguinte falha com "pip: command not found".
+nixPkgs = ["python3Packages.pip"]
 aptPkgs = [
   "libnss3", "libnspr4", "libatk1.0-0", "libatk-bridge2.0-0", "libcups2",
   "libdrm2", "libxkbcommon0", "libxcomposite1", "libxdamage1", "libxfixes3",
