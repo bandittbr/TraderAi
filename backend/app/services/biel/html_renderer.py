@@ -265,11 +265,15 @@ def fill_trade_template(ctx: dict) -> str:
 
     date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
 
+    # Background — tradebk.png personalizado
+    bg_image = _load_asset_b64("tradebk.png")
+
     # Mini gráfico de candles reais (últimas velas de candle_history)
     candles = ctx.get("candle_history", [])[-12:]
     candlestick_svg = _generate_candlestick_svg(candles, width=460, height=200)
 
     replacements = {
+        "{{BG_IMAGE}}": bg_image,
         "{{DATA_ATUAL}}": date_str,
         "{{SYMBOL}}": symbol,
         "{{SIDE}}": side,
@@ -446,7 +450,7 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
             # Mapa de imagens de fundo por tópico
             bg_files = {
                 "market": ASSETS_DIR / "mercadobk.png",
-                "trade":  ASSETS_DIR / "market_bg.png",
+                "trade":  ASSETS_DIR / "tradebk.png",
             }
             bg_path = bg_files.get(topic)
 
