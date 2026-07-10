@@ -14,7 +14,8 @@ import { MarketScore }                    from "@/components/dashboard/MarketSco
 import { TechnicalIndicators }            from "@/components/dashboard/TechnicalIndicators";
 import { MarketAnalysis }                 from "@/components/dashboard/MarketAnalysis";
 import { SignalEngine }                   from "@/components/dashboard/SignalEngine";
-import { SignalHistoryPanel }             from "@/components/dashboard/SignalHistoryPanel";
+import { NewsPlaceholder }                from "@/components/dashboard/NewsPlaceholder";
+import { StatsPlaceholder }               from "@/components/dashboard/StatsPlaceholder";
 import { useWebSocket }                   from "@/hooks/useWebSocket";
 import { useMarketData }                  from "@/hooks/useMarketData";
 import { useIndicators }                  from "@/hooks/useIndicators";
@@ -22,7 +23,7 @@ import { StrategyPerformance }            from "@/components/dashboard/StrategyP
 import AgentesAI                          from "@/components/dashboard/AgentesAI";
 import { Badge }                          from "@/components/ui/Badge";
 import { clsx }                           from "clsx";
-import { getPaperStats, getNews, getFearGreed, getFundingRates, getOpenInterest, getContextScore, getSignalHistory } from "@/lib/api";
+import { getPaperStats, getNews, getFearGreed, getFundingRates, getOpenInterest, getContextScore } from "@/lib/api";
 import Link                               from "next/link";
 import { NewsFeed }                        from "@/components/market-context/NewsFeed";
 import { FearGreedGauge }                  from "@/components/market-context/FearGreedGauge";
@@ -45,7 +46,6 @@ import type {
   FundingRateData,
   OpenInterestData,
   ContextScoreData,
-  SignalHistoryItem,
 } from "@/types";
 
 // ── Ativos disponíveis ────────────────────────────────────────────────────────
@@ -136,21 +136,6 @@ export default function DashboardPage() {
     const id = setInterval(() => getPaperStats().then(setPaperStats), 30_000);
     return () => clearInterval(id);
   }, []);
-
-  // Fase 6: Histórico de sinais (Signal Engine → Analytics)
-  const [signalHistory, setSignalHistory] = useState<SignalHistoryItem[]>([]);
-  const [signalHistoryLoading, setSignalHistoryLoading] = useState(true);
-  useEffect(() => {
-    async function loadSignals() {
-      const res = await getSignalHistory(activeSymbol, 7, 20);
-      setSignalHistory(res?.signals ?? []);
-      setSignalHistoryLoading(false);
-    }
-    setSignalHistoryLoading(true);
-    loadSignals();
-    const id = setInterval(loadSignals, 30_000);
-    return () => clearInterval(id);
-  }, [activeSymbol]);
 
   // Fase 5: Market Context
   const [newsArticles,  setNewsArticles]  = useState<NewsArticle[]>([]);
@@ -287,9 +272,6 @@ export default function DashboardPage() {
             symbol={activeSymbol}
           />
         </div>
-
-        {/* Fase 6: Histórico de Sinais */}
-        <SignalHistoryPanel data={signalHistory} loading={signalHistoryLoading} />
 
         {/* Fase 5: Market Context Score */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

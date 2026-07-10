@@ -144,31 +144,30 @@ export interface AnalysisSummaryResponse {
   score:      ScoreBreakdown;
 }
 
-// ── Fase 6: Signal History (Analytics) ────────────────────────────────────────
+// ── Fase 4+: Placeholders ─────────────────────────────────────────────────────
 
-export type SignalOutcome = "WIN" | "LOSS" | "OPEN" | "MISSED";
-
-export interface SignalHistoryItem {
-  id:                 number;
-  symbol:             string;
-  timeframe:          string;
-  signal:             SignalType;
-  confidence:         number;
-  regime:             string;
-  price_at_emission:  number | null;
-  criteria_count:     number | null;
-  context_score:      number | null;
-  outcome:            SignalOutcome;
-  pnl_pct:            number | null;
-  exit_reason:        string | null;
-  emitted_at:         string;
-  resolved_at:        string | null;
+export interface TradingSignal {
+  id:         string;
+  asset:      string;
+  direction:  "BUY" | "SELL" | "HOLD";
+  confidence: number;
+  timestamp:  string;
 }
 
-export interface SignalHistoryListResponse {
-  signals:     SignalHistoryItem[];
-  total:       number;
-  period_days: number;
+export interface MarketNews {
+  id:        string;
+  title:     string;
+  source:    string;
+  sentiment: "positive" | "negative" | "neutral";
+  timestamp: string;
+  url:       string;
+}
+
+export interface PerformanceStat {
+  label:  string;
+  value:  number;
+  unit:   string;
+  change: number;
 }
 
 // ── Fase 4: Paper Trading ────────────────────────────────────────────────────

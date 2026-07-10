@@ -50,3 +50,4 @@ frontend/tsconfig.tsbuildinfo
 Thumbs.db
 *.swp
 *.swo
+.cannot_delete_sandbox_limitation/
