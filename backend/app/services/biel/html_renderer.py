@@ -499,7 +499,10 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
         return output_path
 
     except Exception as e:
-        logger.error(f"[biel/html] Playwright falhou: {e}")
+        logger.error(
+            f"[biel/html] Playwright falhou ({type(e).__name__}): {e}",
+            exc_info=True,
+        )
         logger.info("[biel/html] Usando fallback PIL...")
 
         # ── Fallback PIL ──────────────────────────────────────────────

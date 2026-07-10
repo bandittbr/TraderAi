@@ -6,11 +6,22 @@ aptPkgs = [
   "ffmpeg", "fonts-noto-color-emoji"
 ]
 
+# PLAYWRIGHT_BROWSERS_PATH=0 força os browsers a serem instalados DENTRO do
+# pacote playwright (site-packages/.../driver/package/.local-browsers) em vez
+# de ~/.cache/ms-playwright. Isso evita o bug clássico "Executable doesn't
+# exist" em produção: sem essa variável, o Nixpacks pode instalar os browsers
+# no $HOME da fase de build e rodar o app com um $HOME diferente na fase de
+# runtime, fazendo o Playwright nunca achar o Chromium e cair sempre no
+# fallback PIL (texto cru, sem estilo) — era exatamente o que a print
+# mostrava.
+[variables]
+PLAYWRIGHT_BROWSERS_PATH = "0"
+
 [phases.install]
 cmds = [
   "pip install -r backend/requirements.txt",
-  "playwright install --with-deps chromium",
-  "playwright install --with-deps chromium-headless-shell",
+  "PLAYWRIGHT_BROWSERS_PATH=0 playwright install --with-deps chromium",
+  "PLAYWRIGHT_BROWSERS_PATH=0 playwright install --with-deps chromium-headless-shell",
 ]
 
 [start]
