@@ -59,124 +59,60 @@ def _fmt_number(value: float) -> str:
 
 
 def _fmt_compact(value: str) -> str:
-    """Retorna string compacta como está (ex: '54.8%' ou '$28.4B')."""
     return value
 
 
 def _generate_sparkline_svg(prices: list, width: int = 900, height: int = 280,
-                             color: str = "#00ff41", glow: bool = True) -> str:
-    """
-    Gera SVG de sparkline a partir de uma lista de preços.
-    Retorna string HTML do SVG inline.
-    """
+                              stroke: str = "#00ff41", fill_opacity: float = 0.15) -> str:
+    """Gera um sparkline SVG a partir de uma lista de preços."""
     if not prices or len(prices) < 2:
         return ""
-
-    vmin, vmax = min(prices), max(prices)
-    if vmax == vmin:
-        vmax = vmin + 1
-
+    min_p, max_p = min(prices), max(prices)
+    range_p = max_p - min_p if max_p != min_p else 1
     n = len(prices)
-    pad = 20
-    w = width - pad * 2
-    h = height - pad * 2
-
     points = []
-    for i, v in enumerate(prices):
-        px = pad + w * i / (n - 1)
-        py = pad + h - h * (v - vmin) / (vmax - vmin)
-        points.append(f"{px:.1f},{py:.1f}")
-
-    path_d = "M" + " L".join(points)
-
-    # Preenche área abaixo da linha (gradiente sutil)
-    first_x, first_y = points[0].split(",")
-    last_x, last_y = points[-1].split(",")
-    area_d = f"M{first_x},{float(first_y)} L" + " L".join(points) + \
-             f" L{last_x},{pad + h} L{first_x},{pad + h} Z"
-
-    glow_filter = ""
-    if glow:
-        glow_filter = """
-        <filter id="sparkGlow">
-          <feGaussianBlur stdDeviation="3" result="blur"/>
-          <feMerge>
-            <feMergeNode in="blur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>"""
-
-    svg = f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}"
-     xmlns="http://www.w3.org/2000/svg" style="display:block">
-  <defs>
-    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="{color}" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="{color}" stop-opacity="0.0"/>
-    </linearGradient>
-    {glow_filter}
-  </defs>
-  <!-- Área sob a linha -->
-  <path d="{area_d}" fill="url(#areaGrad)"/>
-  <!-- Linha principal -->
-  <path d="{path_d}" fill="none" stroke="{color}" stroke-width="3"
-        stroke-linecap="round" stroke-linejoin="round"
-        {('filter="url(#sparkGlow)"' if glow else '')}/>
-  <!-- Ponto final -->
-  <circle cx="{last_x}" cy="{last_y}" r="6" fill="{color}"
-          {('filter="url(#sparkGlow)"' if glow else '')}/>
-  <circle cx="{last_x}" cy="{last_y}" r="2.5" fill="#ffffff"/>
-</svg>"""
-    return svg
+    for i, p in enumerate(prices):
+        x = (i / (n - 1)) * width
+        y = height - ((p - min_p) / range_p) * height
+        points.append((x, y))
+    path_d = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+    area_d = path_d + f" L {width},{height} L 0,{height} Z"
+    return f'''<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">
+  <path d="{area_d}" fill="{stroke}" fill-opacity="{fill_opacity}"/>
+  <path d="{path_d}" fill="none" stroke="{stroke}" stroke-width="3"/>
+</svg>'''
 
 
 def _generate_candlestick_svg(candles: list, width: int = 940, height: int = 130,
-                               up_color: str = "#4ade80", down_color: str = "#ff4444") -> str:
-    """
-    Gera SVG de candles (OHLC) a partir de candle_history real (context_builder).
-    Usado no template de TRADE para ilustrar o contexto recente de preço.
-    """
+                                bull_color: str = "#00ff41", bear_color: str = "#ff3b3b") -> str:
+    """Gera um mini-gráfico de candles SVG a partir de uma lista de candles OHLC."""
     if not candles or len(candles) < 2:
         return ""
-
     highs = [c["high"] for c in candles]
     lows = [c["low"] for c in candles]
-    vmin, vmax = min(lows), max(highs)
-    if vmax == vmin:
-        vmax = vmin + 1
-
+    min_p, max_p = min(lows), max(highs)
+    range_p = max_p - min_p if max_p != min_p else 1
     n = len(candles)
-    pad = 8
-    w = width - pad * 2
-    h = height - pad * 2
-    slot = w / n
-    body_w = max(slot * 0.55, 2)
+    candle_w = width / n
+    body_w = candle_w * 0.6
 
-    bars = []
+    def y_of(price):
+        return height - ((price - min_p) / range_p) * height
+
+    svg_parts = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">']
     for i, c in enumerate(candles):
-        cx = pad + slot * i + slot / 2
-        y_high = pad + h - h * (c["high"] - vmin) / (vmax - vmin)
-        y_low = pad + h - h * (c["low"] - vmin) / (vmax - vmin)
-        y_open = pad + h - h * (c["open"] - vmin) / (vmax - vmin)
-        y_close = pad + h - h * (c["close"] - vmin) / (vmax - vmin)
-        color = up_color if c["close"] >= c["open"] else down_color
-        y_top = min(y_open, y_close)
-        y_bottom = max(y_open, y_close)
-        if y_bottom - y_top < 2:
-            y_bottom = y_top + 2
-        bars.append(
-            f'<line x1="{cx:.1f}" y1="{y_high:.1f}" x2="{cx:.1f}" y2="{y_low:.1f}" '
-            f'stroke="{color}" stroke-width="2" opacity="0.9"/>'
-        )
-        bars.append(
-            f'<rect x="{cx - body_w/2:.1f}" y="{y_top:.1f}" width="{body_w:.1f}" '
-            f'height="{y_bottom - y_top:.1f}" fill="{color}" rx="1.5"/>'
-        )
-
-    return (
-        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
-        f'xmlns="http://www.w3.org/2000/svg" style="display:block">'
-        + "".join(bars) + "</svg>"
-    )
+        x_center = i * candle_w + candle_w / 2
+        is_bull = c["close"] >= c["open"]
+        color = bull_color if is_bull else bear_color
+        y_high, y_low = y_of(c["high"]), y_of(c["low"])
+        svg_parts.append(f'<line x1="{x_center:.1f}" y1="{y_high:.1f}" x2="{x_center:.1f}" y2="{y_low:.1f}" stroke="{color}" stroke-width="1.5"/>')
+        y_open, y_close = y_of(c["open"]), y_of(c["close"])
+        body_top, body_bottom = min(y_open, y_close), max(y_open, y_close)
+        body_h = max(body_bottom - body_top, 1.5)
+        x_left = x_center - body_w / 2
+        svg_parts.append(f'<rect x="{x_left:.1f}" y="{body_top:.1f}" width="{body_w:.1f}" height="{body_h:.1f}" fill="{color}"/>')
+    svg_parts.append('</svg>')
+    return "".join(svg_parts)
 
 
 def fill_market_template(ctx: dict) -> str:
@@ -382,8 +318,9 @@ def fill_insight_template(ctx: dict) -> str:
     for i in range(3):
         ins = insights[i] if i < len(insights) else {}
         replacements[f"{{{{ICON_{i+1}}}}}"] = ins.get("icon", "📊")
-        replacements[f"{{{{TITLE_{i+1}}}}}"] = ins.get("title", "")
-        replacements[f"{{{{DESC_{i+1}}}}}"] = ins.get("desc", "")
+        replacements[f"{{{{QUESTION}}}}"] = question
+        replacements[f"{{{{TITLE_{i+1}}}}}"] = ins.get("title", ""),
+        replacements[f"{{{{DESC_{i+1}}}}}"] = ins.get("desc", ""),
 
     for var, val in replacements.items():
         html = html.replace(var, val)
@@ -397,16 +334,15 @@ def fill_insight_template(ctx: dict) -> str:
 _GEM_SVG = """<svg width="100%" height="100%" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="gemGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#d8c8fb"/>
-      <stop offset="50%" stop-color="#8C52D2"/>
-      <stop offset="100%" stop-color="#5b21b6"/>
-    </linearGradient>
+    <stop offset="0%" stop-color="#d8c8fb"/>
+    <stop offset="50%" stop-color="#8C52D2"/>
+    <stop offset="100%" stop-color="#5b21b6"/>
   </defs>
   <polygon points="70,8 112,45 96,132 44,132 28,45" fill="url(#gemGrad)" stroke="#ffffff" stroke-opacity="0.35" stroke-width="1.5"/>
   <polygon points="70,8 112,45 70,58" fill="#ffffff" fill-opacity="0.28"/>
   <polygon points="70,8 28,45 70,58" fill="#ffffff" fill-opacity="0.12"/>
-  <polygon points="28,45 44,132 70,58" fill="#000000" fill-opacity="0.18"/>
   <polygon points="112,45 96,132 70,58" fill="#000000" fill-opacity="0.08"/>
+  <polygon points="28,45 96,132 70,58" fill="#000000" fill-opacity="0.08"/>
 </svg>"""
 
 
@@ -436,7 +372,11 @@ def fill_news_template(ctx: dict) -> str:
 
     date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
 
+    # Background — noticiasbk.png (mesmo padrão de mercadobk/tradebk/insightbk)
+    bg_image = _load_asset_b64("noticiasbk.png")
+
     replacements = {
+        "{{BG_IMAGE}}": bg_image,
         "{{DATA_ATUAL}}": date_str,
         "{{HEADLINE}}": headline,
         "{{SUMMARY}}": summary,
@@ -455,175 +395,5 @@ def fill_news_template(ctx: dict) -> str:
 
 
 def _draw_text(draw, pos, text, fill, font):
-    """Desenha texto com proteção contra font=None."""
-    if font is None:
-        draw.text(pos, text, fill=fill)
-    else:
-        draw.text(pos, text, fill=fill, font=font)
-
-
-def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> str:
-    """
-    Renderiza HTML → PNG via Playwright (Chromium headless, in-process).
-
-    Tenta Playwright primeiro. Se falhar (Chromium não instalado, ambiente
-    sem headless, etc.), usa fallback PIL (Pillow) para gerar uma imagem
-    simples com os dados disponíveis.
-
-    Args:
-        html: HTML renderizado do template.
-        topic: Tópico do post (market, trade, insight, news).
-        ctx: Contexto original com dados do TradeAI (usado no fallback PIL).
-
-    Roda direto no processo Python (sem subprocess/caminho fixo de SO), então
-    funciona tanto no Windows local quanto no Linux de produção (Railway),
-    desde que o browser esteja instalado: `playwright install chromium`
-    (ver requirements.txt / nixpacks.toml).
-    """
-    filename = f"{topic}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.png"
-    output_path = str(OUTPUT_DIR / filename)
-
-    try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                args=["--no-sandbox", "--disable-dev-shm-usage"]
-            )
-            page = browser.new_page(viewport={"width": 1080, "height": 1350})
-            page.set_content(html, wait_until="networkidle")
-            page.screenshot(path=output_path)
-            browser.close()
-
-        logger.info(f"[biel/html] Renderizado: {output_path}")
-        return output_path
-
-    except Exception as e:
-        logger.error(
-            f"[biel/html] Playwright falhou ({type(e).__name__}): {e}",
-            exc_info=True,
-        )
-        logger.info("[biel/html] Usando fallback PIL...")
-
-        # ── Fallback PIL ──────────────────────────────────────────────
-        # Cria uma imagem com fundo personalizado e dados do contexto.
-        # Tenta carregar imagem de fundo dos assets (mercadobk.png etc.).
-        try:
-            from PIL import Image, ImageDraw, ImageFont
-
-            # ── Background ─────────────────────────────────────────────
-            # Mapa de imagens de fundo por tópico
-            bg_files = {
-                "market":  ASSETS_DIR / "mercadobk.png",
-                "trade":   ASSETS_DIR / "tradebk.png",
-                "insight": ASSETS_DIR / "insightbk.png",
-            }
-            bg_path = bg_files.get(topic)
-
-            if bg_path and bg_path.exists():
-                bg_img = Image.open(bg_path).convert("RGB")
-                bg_img = bg_img.resize((1080, 1350), Image.LANCZOS)
-                img = bg_img
-            else:
-                img = Image.new("RGB", (1080, 1350), color=(5, 10, 8))
-
-            draw = ImageDraw.Draw(img)
-
-            # ── Overlay escuro para legibilidade ───────────────────────
-            # Escurece levemente toda a imagem para o texto aparecer bem
-            from PIL import ImageEnhance
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(0.65)  # 65% do brilho original
-            draw = ImageDraw.Draw(img)
-
-            # ── Fontes ─────────────────────────────────────────────────
-            _font_paths = [
-                "C:/Windows/Fonts/arial.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-                "/System/Library/Fonts/Helvetica.ttc",
-            ]
-
-            def _load_font(size: int):
-                for fp in _font_paths:
-                    try:
-                        return ImageFont.truetype(fp, size)
-                    except (IOError, OSError):
-                        continue
-                try:
-                    return ImageFont.load_default()
-                except Exception:
-                    return None
-
-            font_big   = _load_font(64)
-            font_mid   = _load_font(42)
-            font_small = _load_font(28)
-
-            y = 80
-
-            # Cabeçalho: data
-            date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
-            _draw_text(draw, (80, y), f"TradeAI • {date_str}", fill=(180, 200, 230), font=font_small)
-            y += 100
-
-            # Título
-            titles = {"market": "MERCADO EM MOVIMENTO", "trade": "ANÁLISE DE TRADE",
-                      "insight": "INSIGHT DO DIA", "news": "NOTÍCIA"}
-            title = titles.get(topic, topic.upper())
-            _draw_text(draw, (80, y), title, fill=(0, 255, 65), font=font_big)
-            y += 140
-
-            # Linha separadora
-            draw.rectangle([(80, y), (1000, y + 2)], fill=(0, 255, 65, 60))
-            y += 40
-
-            # Dados do contexto
-            info = []
-            if ctx:
-                btc = ctx.get("btc_price")
-                if btc is not None:
-                    info.append(f"BTC/USDT: ${btc:,.2f}" if btc >= 1 else f"BTC/USDT: ${btc:.8f}")
-                regime = ctx.get("regime", "")
-                if regime:
-                    info.append(f"Regime: {regime}")
-                fg = ctx.get("fear_greed_value")
-                if fg is not None:
-                    label = ctx.get("fear_greed_label", "")
-                    info.append(f"Fear & Greed: {fg} ({label})" if label else f"Fear & Greed: {fg}")
-                pnl = ctx.get("pnl_total")
-                if pnl is not None:
-                    info.append(f"P&L Total: ${pnl:+,.2f}")
-                saldo = ctx.get("saldo")
-                if saldo is not None:
-                    info.append(f"Saldo: ${saldo:,.2f}")
-                win_rate = ctx.get("win_rate_recente")
-                if win_rate is not None:
-                    info.append(f"Win Rate: {win_rate}%")
-
-            if info:
-                for line in info:
-                    _draw_text(draw, (80, y), line, fill=(220, 235, 250), font=font_mid)
-                    y += 60
-            else:
-                _draw_text(draw, (80, y), "Dados em tempo real da TradeAI", fill=(160, 190, 220), font=font_mid)
-                y += 60
-
-            # Rodapé
-            _draw_text(draw, (80, 1280), "DADOS EM TEMPO REAL • ANÁLISE • ESTRATÉGIA",
-                       fill=(100, 140, 180), font=font_small)
-
-            img.save(output_path, "PNG")
-            logger.info(f"[biel/html] Fallback PIL: {output_path}")
-            return output_path
-
-        except ImportError:
-            logger.error("[biel/html] PIL não instalado.")
-            raise RuntimeError(
-                "Playwright falhou e PIL (Pillow) também não está disponível. "
-                "Execute: pip install Pillow"
-            ) from e
-        except Exception as pil_e:
-            logger.error(f"[biel/html] Fallback PIL também falhou: {pil_e}")
-            raise RuntimeError(
-                f"Playwright falhou ({e}) e fallback PIL ({pil_e})."
-            ) from pil_e
+    """Desenha texto com proteção contra porção com fill="""
+    }

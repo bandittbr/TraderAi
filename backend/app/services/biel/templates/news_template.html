@@ -10,7 +10,11 @@
   body {
     width: 1080px;
     height: 1350px;
-    background: #08050d;
+    background-color: #08050d;
+    background-image: url('{{BG_IMAGE}}');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     color: #ffffff;
     font-family: 'Inter', system-ui, sans-serif;
     padding: 60px 70px;
@@ -20,37 +24,12 @@
     position: relative;
   }
 
-  body::before {
-    content: '';
+  /* -- Fade inferior -- garante legibilidade dos cards sobre a arte de fundo -- */
+  .bg-fade-bottom {
     position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, #100a1a 0%, #08050d 40%, #050308 100%);
-    pointer-events: none;
-    z-index: 0;
-  }
-  .bg-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(100,50,180,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(100,50,180,0.03) 1px, transparent 1px);
-    background-size: 60px 60px;
-    pointer-events: none;
-    z-index: 0;
-  }
-  .bg-glow {
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(ellipse 600px 400px at 50% 20%, rgba(100,50,180,0.08) 0%, transparent 70%),
-      radial-gradient(ellipse 400px 300px at 85% 55%, rgba(100,50,180,0.04) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-  .decor-line {
-    position: absolute;
-    left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent 5%, rgba(100,50,180,0.14) 20%, rgba(100,50,180,0.14) 80%, transparent 95%);
+    left: 0; right: 0; bottom: 0;
+    height: 560px;
+    background: linear-gradient(180deg, transparent 0%, rgba(8,5,13,0.5) 45%, rgba(8,5,13,0.82) 100%);
     pointer-events: none;
     z-index: 0;
   }
@@ -185,9 +164,8 @@
 </head>
 <body>
 
-  <div class="bg-grid"></div>
-  <div class="bg-glow"></div>
-  <div class="decor-line" style="top: 1150px;"></div>
+  <!-- FADE INFERIOR (legibilidade dos cards sobre a arte de fundo) -->
+  <div class="bg-fade-bottom"></div>
 
   <!-- HEADER -->
   <div class="header">
