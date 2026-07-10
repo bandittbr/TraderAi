@@ -121,7 +121,11 @@ async def build_context() -> dict:
             )
             regime = result.scalar_one_or_none()
             if regime:
-                ctx["regime"]        = regime.regime
+                # regime.regime é um Enum (MarketRegimeType). Enum.__str__ dá
+                # "MarketRegimeType.SIDEWAYS" em vez do valor puro (mesmo sendo
+                # um str Enum) — usar .value explicitamente evita isso vazar
+                # cru pro texto do post.
+                ctx["regime"]        = regime.regime.value if hasattr(regime.regime, "value") else regime.regime
                 ctx["regime_symbol"] = regime.symbol
         except Exception as e:
             logger.warning(f"[biel/context] Regime: {e}")

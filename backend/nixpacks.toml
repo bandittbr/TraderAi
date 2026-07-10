@@ -1,5 +1,5 @@
 [phases.setup]
-# nixPkgs custom soma ao setup auto-detectado (que já traz python3 +
+# nixPkgs custom some soma ao setup auto-detectado (que já traz python3 +
 # gcc), mas o python3 puro do nixpkgs não inclui pip — sem isso o comando
 # "pip install" da fase seguinte falha com "pip: command not found".
 nixPkgs = ["python3Packages.pip"]
@@ -32,4 +32,7 @@ cmds = [
 [start]
 # Mesma técnica de phases.install — "python3"/"uvicorn" não existem no PATH
 # em runtime também. Localiza o interpretador direto no /nix/store.
-cmd = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f \( -name "python3.[0-9]" -o -name "python3.[0-9][0-9]" \) -path "*/bin/*" 2>/dev/null | head -1) && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
+# PLAYWRIGHT_BROWSERS_PATH=0 precisa vir explícito aqui também — [variables]
+# não garante propagação pro processo de runtime nesse builder, então sem
+# isso o Playwright volta a procurar em ~/.cache/ms-playwright e falha.
+cmd = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f \( -name "python3.[0-9]" -o -name "python3.[0-9][0-9]" \) -path "*/bin/*" 2>/dev/null | head -1) && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
