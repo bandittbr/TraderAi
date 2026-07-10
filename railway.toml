@@ -4,6 +4,9 @@ builder = "NIXPACKS"
 [deploy]
 # Nixpacks detecta o projeto Python em backend/ como raiz,
 # então NÃO usar cd backend — os arquivos já estão na raiz.
-startCommand = "mkdir -p data logs && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+# python3 -m uvicorn (não "uvicorn" puro): o executável instalado via
+# pip install --break-system-packages não fica no PATH nesse builder
+# Nix, só o módulo é garantido acessível pelo interpretador.
+startCommand = "mkdir -p data logs && python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/"
 healthcheckTimeout = 60
