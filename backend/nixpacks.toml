@@ -18,16 +18,17 @@ PLAYWRIGHT_BROWSERS_PATH = "0"
 
 [phases.install]
 # Nem "python3" nem "playwright" existem no PATH desse builder — só "pip".
-# O shebang do "pip" aqui NÃO é um python (é um wrapper nix, primeira linha
-# "#!/nix/store/.../bin/bash -e"), então extrair a 1ª linha não serve. Em
-# vez disso, procuramos dentro do próprio wrapper por qualquer caminho
-# "/nix/store/.../bin/python3(.XX)?" que ele referencia internamente (linha
-# "exec .../python3.XX ...") e usamos esse interpretador real diretamente.
+# Já tentamos ler o shebang/conteúdo do wrapper do pip pra achar o
+# interpretador (deu errado — o wrapper provavelmente delega pra outro
+# arquivo interno em vez de referenciar python3 diretamente em texto). Em
+# vez de depender da implementação do wrapper, procuramos o binário
+# python3.XX direto no /nix/store — ele com certeza existe em algum
+# diretório bin/ ali, já que "pip" só roda porque um python o executa.
 cmds = [
-  'pip install --break-system-packages -r requirements.txt && PYBIN=$(grep -m1 -oE "/nix/store/[^ ]+/bin/python3(\.[0-9]+)?" "$(command -v pip)") && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium-headless-shell'
+  'pip install --break-system-packages -r requirements.txt && PYBIN=$(find /nix/store -type f -name "python3.[0-9]*" -path "*/bin/*" 2>/dev/null | head -1) && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium-headless-shell'
 ]
 
 [start]
-# Mesma técnica de phases.install (grep dentro do wrapper do pip) — "python3"
-# e "uvicorn" não existem no PATH desse ambiente em runtime também.
-cmd = 'mkdir -p data logs && PYBIN=$(grep -m1 -oE "/nix/store/[^ ]+/bin/python3(\.[0-9]+)?" "$(command -v pip)") && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
+# Mesma técnica de phases.install — "python3"/"uvicorn" não existem no PATH
+# em runtime também. Localiza o interpretador direto no /nix/store.
+cmd = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f -name "python3.[0-9]*" -path "*/bin/*" 2>/dev/null | head -1) && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'

@@ -5,9 +5,8 @@ builder = "NIXPACKS"
 # Nixpacks detecta o projeto Python em backend/ como raiz,
 # então NÃO usar cd backend — os arquivos já estão na raiz.
 # Nem "python3" nem "uvicorn" existem no PATH desse builder Nix — só "pip".
-# O "pip" aqui é um wrapper nix (shebang é bash, não python), então
-# procuramos dentro do próprio wrapper pelo caminho real do interpretador
-# python3 que ele invoca internamente, e chamamos "$PYBIN -m uvicorn" nele.
-startCommand = 'mkdir -p data logs && PYBIN=$(grep -m1 -oE "/nix/store/[^ ]+/bin/python3(\.[0-9]+)?" "$(command -v pip)") && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
+# Localiza o interpretador python3.XX direto no /nix/store (mais robusto do
+# que tentar interpretar o wrapper do pip) e chama "$PYBIN -m uvicorn" nele.
+startCommand = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f -name "python3.[0-9]*" -path "*/bin/*" 2>/dev/null | head -1) && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
 healthcheckPath = "/"
 healthcheckTimeout = 60
