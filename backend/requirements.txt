@@ -13,4 +13,5 @@ httpx==0.28.1
 python-multipart==0.0.20
 websockets>=13.0
 matplotlib==3.10.3
+Pillow>=10.0.0
 playwright==1.60.0

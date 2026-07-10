@@ -392,6 +392,10 @@ def render_sync(html: str, topic: str = "market") -> str:
     """
     Renderiza HTML → PNG via Playwright (Chromium headless, in-process).
 
+    Tenta Playwright primeiro. Se falhar (Chromium não instalado, ambiente
+    sem headless, etc.), usa fallback PIL (Pillow) para gerar uma imagem
+    simples com os dados disponíveis.
+
     Roda direto no processo Python (sem subprocess/caminho fixo de SO), então
     funciona tanto no Windows local quanto no Linux de produção (Railway),
     desde que o browser esteja instalado: `playwright install chromium`
@@ -418,4 +422,105 @@ def render_sync(html: str, topic: str = "market") -> str:
     except Exception as e:
         logger.error(f"[biel/html] Playwright falhou: {e}")
         logger.info("[biel/html] Usando fallback PIL...")
+
+        # ── Fallback PIL ──────────────────────────────────────────────
+        # Cria uma imagem simples com os dados do template.
+        # Não é tão bonita quanto o Playwright, mas permite o post
+        # continuar funcionando mesmo sem Chromium.
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+
+            img = Image.new("RGB", (1080, 1350), color=(5, 10, 8))
+            draw = ImageDraw.Draw(img)
+
+            # Tentar fontes disponíveis no sistema
+            _font_paths = [
+                "C:/Windows/Fonts/arial.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                "/System/Library/Fonts/Helvetica.ttc",
+            ]
+
+            def _load_font(size: int):
+                for fp in _font_paths:
+                    try:
+                        return ImageFont.truetype(fp, size)
+                    except (IOError, OSError):
+                        continue
+                return ImageFont.load_default()
+
+            font_big   = _load_font(64)
+            font_mid   = _load_font(42)
+            font_small = _load_font(28)
+
+            y = 80
+
+            # Cabeçalho: data
+            date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
+            draw.text((80, y), f"TradeAI • {date_str}", fill=(100, 140, 180), font=font_small)
+            y += 100
+
+            # Título
+            titles = {"market": "MERCADO EM MOVIMENTO", "trade": "ANÁLISE DE TRADE",
+                      "insight": "INSIGHT DO DIA", "news": "NOTÍCIA"}
+            title = titles.get(topic, topic.upper())
+            draw.text((80, y), title, fill=(0, 255, 65), font=font_big)
+            y += 140
+
+            # Linha separadora
+            draw.rectangle([(80, y), (1000, y + 2)], fill=(30, 50, 70))
+            y += 40
+
+            # Dados do contexto
+            info = []
+            btc = ctx.get("btc_price")
+            if btc is not None:
+                info.append(f"BTC/USDT: ${btc:,.2f}" if btc >= 1 else f"BTC/USDT: ${btc:.8f}")
+            regime = ctx.get("regime", "")
+            if regime:
+                info.append(f"Regime: {regime}")
+            fg = ctx.get("fear_greed_value")
+            if fg is not None:
+                label = ctx.get("fear_greed_label", "")
+                info.append(f"Fear & Greed: {fg} ({label})" if label else f"Fear & Greed: {fg}")
+            pnl = ctx.get("pnl_total")
+            if pnl is not None:
+                info.append(f"P&L Total: ${pnl:+,.2f}")
+            saldo = ctx.get("saldo")
+            if saldo is not None:
+                info.append(f"Saldo: ${saldo:,.2f}")
+            win_rate = ctx.get("win_rate_recente")
+            if win_rate is not None:
+                info.append(f"Win Rate: {win_rate}%")
+
+            if info:
+                for line in info:
+                    draw.text((80, y), line, fill=(200, 220, 240), font=font_mid)
+                    y += 60
+
+            # Mensagem central
+            y = max(y + 80, 700)
+            draw.text((80, y), "Powered by TradeAI", fill=(60, 90, 120), font=font_small)
+            y += 50
+            draw.text((80, y), "Dados em tempo real • Análise • Estratégia", fill=(50, 70, 90), font=font_small)
+
+            # Rodapé
+            draw.text((80, 1280), "DADOS EM TEMPO REAL • ANÁLISE • ESTRATÉGIA",
+                      fill=(50, 70, 90), font=font_small)
+
+            img.save(output_path, "PNG")
+            logger.info(f"[biel/html] Fallback PIL: {output_path}")
+            return output_path
+
+        except ImportError:
+            logger.error("[biel/html] PIL não instalado.")
+            raise RuntimeError(
+                "Playwright falhou e PIL (Pillow) também não está disponível. "
+                "Execute: pip install Pillow"
+            ) from e
+        except Exception as pil_e:
+            logger.error(f"[biel/html] Fallback PIL também falhou: {pil_e}")
+            raise RuntimeError(
+                f"Playwright falhou ({e}) e fallback PIL ({pil_e})."
+            ) from pil_e
      
