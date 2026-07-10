@@ -6,7 +6,10 @@ Roda como background task junto com o servidor FastAPI.
 
 import asyncio
 from datetime import datetime, timezone
+from sqlalchemy import select, func as sqlfunc
 
+from app.database import AsyncSessionLocal
+from app.models.biel import BielPost
 from app.services.biel.post_engine import run_post, _get_config
 from app.services.biel.token_manager import check_and_renew
 from app.logger import get_logger
@@ -28,6 +31,27 @@ async def _should_post_now(config, now: datetime, post_type: str) -> tuple[bool,
         hours = [8, 12, 18, 22] if post_type == "image" else [9, 21]
 
     return now.hour in hours
+
+
+async def _already_posted_this_hour(post_type: str, now: datetime) -> bool:
+    """
+    Confere no banco (fonte da verdade) se já existe um post desse tipo
+    criado nesta janela de hora. O set `posted_hours` do loop é só em
+    memória do processo — reinicia toda vez que o backend reinicia (deploy,
+    crash, etc.), então sozinho ele não evita re-postar depois de um
+    restart que caia dentro do mesmo horário configurado. Essa checagem no
+    banco é a que realmente evita o post duplicado.
+    """
+    hour_start = now.replace(minute=0, second=0, microsecond=0)
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(sqlfunc.count(BielPost.id)).where(
+                BielPost.post_type == post_type,
+                BielPost.status.in_(("pending", "published")),
+                BielPost.created_at >= hour_start,
+            )
+        )
+        return (result.scalar() or 0) > 0
 
 
 async def biel_scheduler_loop():
@@ -64,30 +88,39 @@ async def biel_scheduler_loop():
                 # Imagem?
                 if hour_key_image not in posted_hours:
                     if await _should_post_now(config, now, "image"):
-                        logger.info(
-                            f"[biel/scheduler] Hora de postar IMAGEM! "
-                            f"{now.strftime('%H:%M UTC')}"
-                        )
-                        result = await run_post(post_type="image")
-                        posted_hours.add(hour_key_image)
-                        logger.info(
-                            f"[biel/scheduler] Resultado imagem: "
-                            f"{result.get('status')}"
-                        )
+                        if await _already_posted_this_hour("image", now):
+                            # Já existe post dessa hora no banco (ex: processo
+                            # reiniciou e o set em memória zerou) — só marca,
+                            # não posta de novo.
+                            posted_hours.add(hour_key_image)
+                        else:
+                            logger.info(
+                                f"[biel/scheduler] Hora de postar IMAGEM! "
+                                f"{now.strftime('%H:%M UTC')}"
+                            )
+                            result = await run_post(post_type="image")
+                            posted_hours.add(hour_key_image)
+                            logger.info(
+                                f"[biel/scheduler] Resultado imagem: "
+                                f"{result.get('status')}"
+                            )
 
                 # Reel?
                 if hour_key_reel not in posted_hours:
                     if await _should_post_now(config, now, "reel"):
-                        logger.info(
-                            f"[biel/scheduler] Hora de postar REEL! "
-                            f"{now.strftime('%H:%M UTC')}"
-                        )
-                        result = await run_post(post_type="reel")
-                        posted_hours.add(hour_key_reel)
-                        logger.info(
-                            f"[biel/scheduler] Resultado reel: "
-                            f"{result.get('status')}"
-                        )
+                        if await _already_posted_this_hour("reel", now):
+                            posted_hours.add(hour_key_reel)
+                        else:
+                            logger.info(
+                                f"[biel/scheduler] Hora de postar REEL! "
+                                f"{now.strftime('%H:%M UTC')}"
+                            )
+                            result = await run_post(post_type="reel")
+                            posted_hours.add(hour_key_reel)
+                            logger.info(
+                                f"[biel/scheduler] Resultado reel: "
+                                f"{result.get('status')}"
+                            )
 
         except Exception as e:
             logger.error(f"[biel/scheduler] Erro no loop: {e}")

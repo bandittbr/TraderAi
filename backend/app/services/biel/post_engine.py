@@ -4,6 +4,7 @@ Orquestra o pipeline completo: contexto → IA → mídia (imagem/reel) → Inst
 """
 
 import os
+import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from sqlalchemy import select, func as sqlfunc
@@ -48,19 +49,36 @@ async def _get_config() -> BielConfig | None:
         return result.scalar_one_or_none()
 
 
+# Serializa TODAS as chamadas a run_post — manual (force_post) e automática
+# (biel_scheduler_loop) chamam essa mesma função. Sem essa trava, um clique
+# manual e o scheduler automático podem cair na mesma janela e publicar dois
+# posts (um do tópico pedido, outro do tópico auto-rotacionado do scheduler)
+# quase ao mesmo tempo — foi exatamente o bug relatado ("forcei post de
+# mercado e saiu mercado + notícia").
+_run_post_lock = asyncio.Lock()
+
+
 async def run_post(
     topic: str | None = None,
     post_type: str | None = None,
 ) -> dict:
     """
-    Executa um ciclo completo de postagem.
-    
+    Executa um ciclo completo de postagem (serializado — ver _run_post_lock).
+
     Args:
         topic: Tópico específico (opcional — auto-determinado se None)
         post_type: "image" ou "reel" (opcional — auto-determinado se None)
-    
+
     Retorna dict com resultado (status, post_id, error).
     """
+    async with _run_post_lock:
+        return await _run_post_impl(topic, post_type)
+
+
+async def _run_post_impl(
+    topic: str | None = None,
+    post_type: str | None = None,
+) -> dict:
     config = await _get_config()
     if not config:
         logger.error("[biel/engine] Nenhuma configuração ativa. Configure o Biel primeiro.")
@@ -132,7 +150,7 @@ async def run_post(
         logger.info(f"[biel/engine] Caption gerada ({len(caption)} chars)")
 
         if post_type == "reel":
-            # ── Pipeline REEL ─────────────────────────────────────────────
+            # ── Pipeline REEL ───────────────────────────────────
             # 3a. Gerar imagem base para o reel
             image_path = await generate_image(context, topic)
             logger.info(f"[biel/engine] Imagem base gerada: {image_path}")
@@ -162,7 +180,7 @@ async def run_post(
             )
 
         else:
-            # ── Pipeline IMAGE ────────────────────────────────────────────
+            # ── Pipeline IMAGE ───────────────────────────────────
             # 3b. Gerar imagem
             image_path = await generate_image(context, topic)
             filename = Path(image_path).name

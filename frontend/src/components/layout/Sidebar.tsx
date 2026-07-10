@@ -50,7 +50,6 @@ const NAV_ITEMS: NavGroup[] = [
     group: "INFLUENCER",
     items: [
       { label: "Influencer",  icon: "influ", href: "/influencer", external: false },
-      { label: "Biel Config", icon: "bielc", href: "/biel",       external: false },
     ],
   },
   {
@@ -62,7 +61,7 @@ const NAV_ITEMS: NavGroup[] = [
 ];
 
 const ICON_MAP: Record<string, string> = {
-  home:  "⌂",
+  home:  "⌘",
   chart: "◈",
   paper: "◎",
   trade: "◉",
