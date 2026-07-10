@@ -25,7 +25,7 @@ def generate_market_image(ctx: dict) -> str:
     from app.services.biel.html_renderer import fill_market_template, render_sync
 
     html = fill_market_template(ctx)
-    return render_sync(html, "market")
+    return render_sync(html, "market", ctx)
 
 
 def generate_trade_image(ctx: dict) -> str:
@@ -33,7 +33,7 @@ def generate_trade_image(ctx: dict) -> str:
     from app.services.biel.html_renderer import fill_trade_template, render_sync
 
     html = fill_trade_template(ctx)
-    return render_sync(html, "trade")
+    return render_sync(html, "trade", ctx)
 
 
 def generate_insight_image(ctx: dict) -> str:
@@ -41,7 +41,7 @@ def generate_insight_image(ctx: dict) -> str:
     from app.services.biel.html_renderer import fill_insight_template, render_sync
 
     html = fill_insight_template(ctx)
-    return render_sync(html, "insight")
+    return render_sync(html, "insight", ctx)
 
 
 def generate_news_image(ctx: dict) -> str:
@@ -49,7 +49,7 @@ def generate_news_image(ctx: dict) -> str:
     from app.services.biel.html_renderer import fill_news_template, render_sync
 
     html = fill_news_template(ctx)
-    return render_sync(html, "news")
+    return render_sync(html, "news", ctx)
 
 
 # ═══════════════════════════════════════════════════════════════════

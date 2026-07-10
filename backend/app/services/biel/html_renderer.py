@@ -388,13 +388,26 @@ def fill_news_template(ctx: dict) -> str:
     return html
 
 
-def render_sync(html: str, topic: str = "market") -> str:
+def _draw_text(draw, pos, text, fill, font):
+    """Desenha texto com proteção contra font=None."""
+    if font is None:
+        draw.text(pos, text, fill=fill)
+    else:
+        draw.text(pos, text, fill=fill, font=font)
+
+
+def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> str:
     """
     Renderiza HTML → PNG via Playwright (Chromium headless, in-process).
 
     Tenta Playwright primeiro. Se falhar (Chromium não instalado, ambiente
     sem headless, etc.), usa fallback PIL (Pillow) para gerar uma imagem
     simples com os dados disponíveis.
+
+    Args:
+        html: HTML renderizado do template.
+        topic: Tópico do post (market, trade, insight, news).
+        ctx: Contexto original com dados do TradeAI (usado no fallback PIL).
 
     Roda direto no processo Python (sem subprocess/caminho fixo de SO), então
     funciona tanto no Windows local quanto no Linux de produção (Railway),
@@ -424,7 +437,7 @@ def render_sync(html: str, topic: str = "market") -> str:
         logger.info("[biel/html] Usando fallback PIL...")
 
         # ── Fallback PIL ──────────────────────────────────────────────
-        # Cria uma imagem simples com os dados do template.
+        # Cria uma imagem simples com os dados do contexto.
         # Não é tão bonita quanto o Playwright, mas permite o post
         # continuar funcionando mesmo sem Chromium.
         try:
@@ -447,7 +460,11 @@ def render_sync(html: str, topic: str = "market") -> str:
                         return ImageFont.truetype(fp, size)
                     except (IOError, OSError):
                         continue
-                return ImageFont.load_default()
+                # Fallback: carrega fonte padrão
+                try:
+                    return ImageFont.load_default()
+                except Exception:
+                    return None
 
             font_big   = _load_font(64)
             font_mid   = _load_font(42)
@@ -457,56 +474,60 @@ def render_sync(html: str, topic: str = "market") -> str:
 
             # Cabeçalho: data
             date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
-            draw.text((80, y), f"TradeAI • {date_str}", fill=(100, 140, 180), font=font_small)
+            _draw_text(draw, (80, y), f"TradeAI • {date_str}", fill=(100, 140, 180), font=font_small)
             y += 100
 
             # Título
             titles = {"market": "MERCADO EM MOVIMENTO", "trade": "ANÁLISE DE TRADE",
                       "insight": "INSIGHT DO DIA", "news": "NOTÍCIA"}
             title = titles.get(topic, topic.upper())
-            draw.text((80, y), title, fill=(0, 255, 65), font=font_big)
+            _draw_text(draw, (80, y), title, fill=(0, 255, 65), font=font_big)
             y += 140
 
             # Linha separadora
             draw.rectangle([(80, y), (1000, y + 2)], fill=(30, 50, 70))
             y += 40
 
-            # Dados do contexto
+            # Dados do contexto (ctx pode ser None se não foi passado)
             info = []
-            btc = ctx.get("btc_price")
-            if btc is not None:
-                info.append(f"BTC/USDT: ${btc:,.2f}" if btc >= 1 else f"BTC/USDT: ${btc:.8f}")
-            regime = ctx.get("regime", "")
-            if regime:
-                info.append(f"Regime: {regime}")
-            fg = ctx.get("fear_greed_value")
-            if fg is not None:
-                label = ctx.get("fear_greed_label", "")
-                info.append(f"Fear & Greed: {fg} ({label})" if label else f"Fear & Greed: {fg}")
-            pnl = ctx.get("pnl_total")
-            if pnl is not None:
-                info.append(f"P&L Total: ${pnl:+,.2f}")
-            saldo = ctx.get("saldo")
-            if saldo is not None:
-                info.append(f"Saldo: ${saldo:,.2f}")
-            win_rate = ctx.get("win_rate_recente")
-            if win_rate is not None:
-                info.append(f"Win Rate: {win_rate}%")
+            if ctx:
+                btc = ctx.get("btc_price")
+                if btc is not None:
+                    info.append(f"BTC/USDT: ${btc:,.2f}" if btc >= 1 else f"BTC/USDT: ${btc:.8f}")
+                regime = ctx.get("regime", "")
+                if regime:
+                    info.append(f"Regime: {regime}")
+                fg = ctx.get("fear_greed_value")
+                if fg is not None:
+                    label = ctx.get("fear_greed_label", "")
+                    info.append(f"Fear & Greed: {fg} ({label})" if label else f"Fear & Greed: {fg}")
+                pnl = ctx.get("pnl_total")
+                if pnl is not None:
+                    info.append(f"P&L Total: ${pnl:+,.2f}")
+                saldo = ctx.get("saldo")
+                if saldo is not None:
+                    info.append(f"Saldo: ${saldo:,.2f}")
+                win_rate = ctx.get("win_rate_recente")
+                if win_rate is not None:
+                    info.append(f"Win Rate: {win_rate}%")
 
             if info:
                 for line in info:
-                    draw.text((80, y), line, fill=(200, 220, 240), font=font_mid)
+                    _draw_text(draw, (80, y), line, fill=(200, 220, 240), font=font_mid)
                     y += 60
+            else:
+                _draw_text(draw, (80, y), "Dados em tempo real da TradeAI", fill=(100, 140, 180), font=font_mid)
+                y += 60
 
             # Mensagem central
             y = max(y + 80, 700)
-            draw.text((80, y), "Powered by TradeAI", fill=(60, 90, 120), font=font_small)
+            _draw_text(draw, (80, y), "Powered by TradeAI", fill=(60, 90, 120), font=font_small)
             y += 50
-            draw.text((80, y), "Dados em tempo real • Análise • Estratégia", fill=(50, 70, 90), font=font_small)
+            _draw_text(draw, (80, y), "Dados em tempo real • Análise • Estratégia", fill=(50, 70, 90), font=font_small)
 
             # Rodapé
-            draw.text((80, 1280), "DADOS EM TEMPO REAL • ANÁLISE • ESTRATÉGIA",
-                      fill=(50, 70, 90), font=font_small)
+            _draw_text(draw, (80, 1280), "DADOS EM TEMPO REAL • ANÁLISE • ESTRATÉGIA",
+                       fill=(50, 70, 90), font=font_small)
 
             img.save(output_path, "PNG")
             logger.info(f"[biel/html] Fallback PIL: {output_path}")
