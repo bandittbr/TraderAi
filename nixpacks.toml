@@ -28,12 +28,7 @@ PLAYWRIGHT_BROWSERS_PATH = "0"
 
 [phases.install]
 cmds = [
-  # --break-system-packages: necessário porque o python3 vem do Nix
-  # (/nix/store, imutável) e o pip recusa instalar no ambiente global por
-  # padrão (PEP 668) sem essa flag.
-  "pip install --break-system-packages -r backend/requirements.txt",
-  "PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium",
-  "PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium-headless-shell",
+  "pip install --break-system-packages -r backend/requirements.txt && PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium-headless-shell"
 ]
 
 [start]

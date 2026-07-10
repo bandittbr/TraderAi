@@ -17,17 +17,14 @@ aptPkgs = [
 PLAYWRIGHT_BROWSERS_PATH = "0"
 
 [phases.install]
+# Um único comando encadeado com "&&" (em vez de itens separados no array):
+# cada item do array "cmds" parece rodar em uma invocação de shell própria
+# nesse builder, perdendo o PATH resolvido (python3/pip) entre um item e o
+# próximo — foi assim que "pip install" funcionou mas o passo seguinte
+# ("python3 -m playwright") deu "python3: command not found" mesmo python3
+# tendo acabado de rodar o pip. Encadear em um shell só evita isso.
 cmds = [
-  # --break-system-packages: o python3 vem do Nix (/nix/store, imutável) e o
-  # pip recusa instalar no ambiente global por padrão (PEP 668). O provider
-  # Python auto-detectado do Nixpacks normalmente usa uma venv pra evitar
-  # isso; como definimos install manualmente, contornamos com essa flag.
-  "pip install --break-system-packages -r requirements.txt",
-  # "playwright" (o executável, não o módulo) não está no PATH depois do
-  # pip install --break-system-packages nesse ambiente — usar "python3 -m
-  # playwright" chama o mesmo CLI via o interpretador, sem depender do PATH.
-  "PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium",
-  "PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium-headless-shell",
+  "pip install --break-system-packages -r requirements.txt && PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium-headless-shell"
 ]
 
 [start]
