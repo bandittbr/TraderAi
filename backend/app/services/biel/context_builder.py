@@ -126,7 +126,7 @@ async def build_context() -> dict:
         except Exception as e:
             logger.warning(f"[biel/context] Regime: {e}")
 
-        # ── Fear & Greed ───────────────────────────────────────────────────
+        # ── Fear & Greed (+ variação real vs ~24h atrás) ────────────────────
         try:
             result = await session.execute(
                 select(FearGreedIndex)
@@ -135,8 +135,20 @@ async def build_context() -> dict:
             )
             fg = result.scalar_one_or_none()
             if fg:
-                ctx["fear_greed_value"]       = fg.value
-                ctx["fear_greed_label"]       = fg.value_classification
+                ctx["fear_greed_value"] = fg.value
+                ctx["fear_greed_label"] = fg.classification
+
+                # Ponto mais próximo de 24h atrás (índice é atualizado de hora em hora)
+                cutoff_24h = fg.timestamp - 24 * 3600
+                result_prev = await session.execute(
+                    select(FearGreedIndex)
+                    .where(FearGreedIndex.timestamp <= cutoff_24h)
+                    .order_by(desc(FearGreedIndex.timestamp))
+                    .limit(1)
+                )
+                fg_prev = result_prev.scalar_one_or_none()
+                if fg_prev:
+                    ctx["fear_greed_change_24h"] = fg.value - fg_prev.value
         except Exception as e:
             logger.warning(f"[biel/context] FearGreed: {e}")
 
@@ -221,14 +233,35 @@ async def build_context() -> dict:
             )
             stat = result.scalar_one_or_none()
             if stat:
-                dom = "58.2%"  # dominância não está no banco — manter fallback
                 vol_str = f"${stat.volume_24h:,.1f}" if stat.volume_24h >= 1_000_000_000 else f"${stat.volume_24h:,.0f}"
                 ctx["resumo"] = {
-                    "btc_dominance": dom,
-                    "volume_24h":    vol_str,
+                    "volume_24h": vol_str,
                 }
         except Exception as e:
             logger.warning(f"[biel/context] Resumo: {e}")
+
+        # ── Variação real de volume: últimas 24h vs 24h anteriores ─────────
+        # (compara soma de volume dos candles 1h — nada inventado, só derivado
+        # do candle_history já coletado pela app)
+        try:
+            cutoff_48h = int((datetime.now(timezone.utc) - timedelta(hours=48)).timestamp())
+            cutoff_24h = int((datetime.now(timezone.utc) - timedelta(hours=24)).timestamp())
+            result = await session.execute(
+                select(MarketCandle)
+                .where(MarketCandle.symbol == "BTCUSDT")
+                .where(MarketCandle.timeframe == "1h")
+                .where(MarketCandle.timestamp >= cutoff_48h)
+                .order_by(MarketCandle.timestamp)
+            )
+            candles_48h = result.scalars().all()
+            recent_vol   = sum(c.volume for c in candles_48h if c.timestamp >= cutoff_24h)
+            previous_vol = sum(c.volume for c in candles_48h if c.timestamp < cutoff_24h)
+            if previous_vol > 0:
+                ctx["volume_24h_change_pct"] = round(
+                    (recent_vol - previous_vol) / previous_vol * 100, 1
+                )
+        except Exception as e:
+            logger.warning(f"[biel/context] Volume change: {e}")
 
         # ── Candle mais recente (TRADE model) ─────────────────────────────
         try:

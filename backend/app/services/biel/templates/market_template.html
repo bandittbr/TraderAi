@@ -86,7 +86,10 @@
     z-index: 1;
   }
   .title .line-1 { color: #ffffff; display: block; }
-  .title .line-2 { color: #00ff41; display: block; text-shadow: 0 0 30px rgba(0,255,65,0.2); }
+  .title .line-2 { display: block; }
+  .title .line-2.green  { color: #00ff41; text-shadow: 0 0 30px rgba(0,255,65,0.2); }
+  .title .line-2.red    { color: #ff4444; text-shadow: 0 0 30px rgba(255,68,68,0.2); }
+  .title .line-2.orange { color: #ff9500; text-shadow: 0 0 30px rgba(255,149,0,0.2); }
   .subtitle {
     font-family: 'Inter', sans-serif;
     font-weight: 400;
@@ -165,15 +168,10 @@
     text-align: center;
   }
   .card-icon {
-    font-size: 28px;
-    margin-bottom: 8px;
-    opacity: 0.7;
-    filter: drop-shadow(0 0 6px rgba(0,255,65,0.2));
+    font-size: 26px;
+    margin-top: 8px;
+    line-height: 1;
   }
-  .card-icon.green  { color: #00ff41; }
-  .card-icon.red    { color: #ff4444; }
-  .card-icon.orange { color: #ff9500; }
-  .card-icon.white  { color: rgba(255,255,255,0.6); }
   .card-label {
     font-family: 'Inter', sans-serif;
     font-weight: 400;
@@ -191,6 +189,14 @@
   .card-value.green  { color: #00ff41; }
   .card-value.red    { color: #ff4444; }
   .card-value.orange { color: #ff9500; }
+  .card-sub {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: #00ff41;
+    margin-top: 6px;
+  }
+  .card-sub.negative { color: #ff4444; }
 
   /* -- FOOTER -- */
   .footer {
@@ -223,7 +229,7 @@
   </div>
 
   <!-- TITLE -->
-  <div class="title"><span class="line-1">MERCADO</span><span class="line-2">EM MOVIMENTO</span></div>
+  <div class="title"><span class="line-1">MERCADO</span><span class="line-2 {{TITLE_CLASS}}">{{TITLE_LINE2}}</span></div>
   <div class="subtitle">Panorama completo do mercado em tempo real.</div>
 
   <!-- PRICE -->
@@ -240,19 +246,19 @@
   <!-- 3-COLUMN METRICS -->
   <div class="grid">
     <div class="card">
-      <div class="card-icon green">◈</div>
-      <div class="card-label">DOMÍNIO BTC</div>
-      <div class="card-value green">{{DOMINIO}}</div>
+      <div class="card-label">F&amp;G INDEX</div>
+      <div class="card-value {{FEARGREED_CLASS}}">{{FEARGREED}}</div>
+      <div class="card-sub {{FEARGREED_SUB_CLASS}}">{{FEARGREED_SUB}}</div>
     </div>
     <div class="card">
-      <div class="card-icon white">◉</div>
       <div class="card-label">VOLUME 24H</div>
       <div class="card-value">{{VOLUME}}</div>
+      <div class="card-sub {{VOLUME_SUB_CLASS}}">{{VOLUME_SUB}}</div>
     </div>
     <div class="card">
-      <div class="card-icon {{SENTIMENTO_CLASS}}">{{SENTIMENTO_ICON}}</div>
       <div class="card-label">SENTIMENTO</div>
       <div class="card-value {{SENTIMENTO_CLASS}}">{{SENTIMENTO}}</div>
+      <div class="card-icon">{{SENTIMENTO_ICON}}</div>
     </div>
   </div>
 

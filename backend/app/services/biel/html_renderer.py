@@ -181,8 +181,10 @@ def _generate_candlestick_svg(candles: list, width: int = 940, height: int = 130
 
 def fill_market_template(ctx: dict) -> str:
     """
-    Preenche o template HTML do MERCADO com dados dinâmicos.
-    Retorna o HTML completo como string.
+    Preenche o template HTML do MERCADO com dados 100% dinâmicos — nada
+    fica hardcoded exceto os rótulos fixos (BTC/USDT, F&G, VOLUME 24H,
+    SENTIMENTO, TRADER AI). Título, data, preço, variação e os 3 cards
+    (Fear & Greed, Volume 24h, Sentimento) refletem o estado real do app.
     """
     html = _load_template("market_template.html")
 
@@ -191,41 +193,97 @@ def fill_market_template(ctx: dict) -> str:
 
     preco_str = f"${price:,.2f}" if price >= 1 else f"${price:.8f}"
     sinal = "+" if change >= 0 else ""
-    change_str = f"{sinal}{change:.2f}%"
+    change_str = f"{sinal}{change:.2f}% (24h)"
 
     change_class = "negative" if change < 0 else ""
     if change == 0:
         change_class = ""
 
+    # ── Título dinâmico: reflete o regime de mercado real (MarketRegime) ──
     regime = ctx.get("regime", "NEUTRAL").upper()
     if "BULL" in regime:
         sentimento = "BULLISH"
         sentimento_class = "green"
-        sentimento_icon = "▲"
+        sentimento_icon = "🐂"
+        title_line2, title_class = "EM ALTA", "green"
     elif "BEAR" in regime:
         sentimento = "BEARISH"
         sentimento_class = "red"
-        sentimento_icon = "▼"
-    else:
-        sentimento = "NEUTRAL"
+        sentimento_icon = "🐻"
+        title_line2, title_class = "EM QUEDA", "red"
+    elif "HIGH_VOL" in regime:
+        sentimento = "VOLÁTIL"
         sentimento_class = "orange"
-        sentimento_icon = "◆"
+        sentimento_icon = "⚡"
+        title_line2, title_class = "VOLÁTIL", "orange"
+    elif "SIDEWAYS" in regime:
+        sentimento = "NEUTRO"
+        sentimento_class = "orange"
+        sentimento_icon = "⚖️"
+        title_line2, title_class = "LATERALIZADO", "orange"
+    else:
+        sentimento = "NEUTRO"
+        sentimento_class = "orange"
+        sentimento_icon = "⚖️"
+        title_line2, title_class = "EM MOVIMENTO", "green"
 
-    dominio = ctx.get("resumo", {}).get("btc_dominance", "54.8%")
-    volume = ctx.get("resumo", {}).get("volume_24h", "$32.1B")
+    # ── Fear & Greed real (substitui a antiga "Domínio BTC", que nunca
+    #    teve dado real por trás) — valor + variação real vs ~24h atrás ──
+    fg_value = ctx.get("fear_greed_value")
+    fg_change = ctx.get("fear_greed_change_24h")
+    if fg_value is not None:
+        feargreed_str = str(fg_value)
+        if fg_change is not None:
+            fg_sinal = "+" if fg_change >= 0 else ""
+            feargreed_sub = f"{fg_sinal}{fg_change} pts (24h)"
+            feargreed_sub_class = "negative" if fg_change < 0 else ""
+        else:
+            feargreed_sub = ctx.get("fear_greed_label", "")
+            feargreed_sub_class = ""
+        if fg_value <= 25:
+            feargreed_class = "red"
+        elif fg_value <= 45:
+            feargreed_class = "orange"
+        elif fg_value <= 55:
+            feargreed_class = ""
+        else:
+            feargreed_class = "green"
+    else:
+        feargreed_str = "—"
+        feargreed_sub = ""
+        feargreed_sub_class = ""
+        feargreed_class = ""
+
+    # ── Volume 24h real + variação real vs 24h anteriores (candle_history) ──
+    volume = ctx.get("resumo", {}).get("volume_24h", "—")
+    vol_change = ctx.get("volume_24h_change_pct")
+    if vol_change is not None:
+        vol_sinal = "+" if vol_change >= 0 else ""
+        volume_sub = f"{vol_sinal}{vol_change}%"
+        volume_sub_class = "negative" if vol_change < 0 else ""
+    else:
+        volume_sub = ""
+        volume_sub_class = ""
 
     date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
 
-    # Background — arte fixa (mapa-múndi + linha de alta), fornecida pelo usuário.
+    # Background — arte fixa (mapa-múndi + linha de alta).
     bg_image = _load_asset_b64("mercadobk.png")
 
     replacements = {
         "{{DATA_ATUAL}}": date_str,
+        "{{TITLE_LINE2}}": title_line2,
+        "{{TITLE_CLASS}}": title_class,
         "{{PRECO_BTC}}": preco_str,
         "{{PORCENTAGEM_BTC}}": change_str,
         "{{CHANGE_CLASS}}": change_class,
-        "{{DOMINIO}}": dominio,
+        "{{FEARGREED}}": feargreed_str,
+        "{{FEARGREED_CLASS}}": feargreed_class,
+        "{{FEARGREED_SUB}}": feargreed_sub,
+        "{{FEARGREED_SUB_CLASS}}": feargreed_sub_class,
         "{{VOLUME}}": volume,
+        "{{VOLUME_SUB}}": volume_sub,
+        "{{VOLUME_SUB_CLASS}}": volume_sub_class,
         "{{SENTIMENTO}}": sentimento,
         "{{SENTIMENTO_CLASS}}": sentimento_class,
         "{{SENTIMENTO_ICON}}": sentimento_icon,
@@ -566,4 +624,3 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
             raise RuntimeError(
                 f"Playwright falhou ({e}) e fallback PIL ({pil_e})."
             ) from pil_e
-     
