@@ -437,16 +437,36 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
         logger.info("[biel/html] Usando fallback PIL...")
 
         # ── Fallback PIL ──────────────────────────────────────────────
-        # Cria uma imagem simples com os dados do contexto.
-        # Não é tão bonita quanto o Playwright, mas permite o post
-        # continuar funcionando mesmo sem Chromium.
+        # Cria uma imagem com fundo personalizado e dados do contexto.
+        # Tenta carregar imagem de fundo dos assets (mercadobk.png etc.).
         try:
             from PIL import Image, ImageDraw, ImageFont
 
-            img = Image.new("RGB", (1080, 1350), color=(5, 10, 8))
+            # ── Background ─────────────────────────────────────────────
+            # Mapa de imagens de fundo por tópico
+            bg_files = {
+                "market": ASSETS_DIR / "mercadobk.png",
+                "trade":  ASSETS_DIR / "market_bg.png",
+            }
+            bg_path = bg_files.get(topic)
+
+            if bg_path and bg_path.exists():
+                bg_img = Image.open(bg_path).convert("RGB")
+                bg_img = bg_img.resize((1080, 1350), Image.LANCZOS)
+                img = bg_img
+            else:
+                img = Image.new("RGB", (1080, 1350), color=(5, 10, 8))
+
             draw = ImageDraw.Draw(img)
 
-            # Tentar fontes disponíveis no sistema
+            # ── Overlay escuro para legibilidade ───────────────────────
+            # Escurece levemente toda a imagem para o texto aparecer bem
+            from PIL import ImageEnhance
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(0.65)  # 65% do brilho original
+            draw = ImageDraw.Draw(img)
+
+            # ── Fontes ─────────────────────────────────────────────────
             _font_paths = [
                 "C:/Windows/Fonts/arial.ttf",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -460,7 +480,6 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
                         return ImageFont.truetype(fp, size)
                     except (IOError, OSError):
                         continue
-                # Fallback: carrega fonte padrão
                 try:
                     return ImageFont.load_default()
                 except Exception:
@@ -474,7 +493,7 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
 
             # Cabeçalho: data
             date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
-            _draw_text(draw, (80, y), f"TradeAI • {date_str}", fill=(100, 140, 180), font=font_small)
+            _draw_text(draw, (80, y), f"TradeAI • {date_str}", fill=(180, 200, 230), font=font_small)
             y += 100
 
             # Título
@@ -485,10 +504,10 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
             y += 140
 
             # Linha separadora
-            draw.rectangle([(80, y), (1000, y + 2)], fill=(30, 50, 70))
+            draw.rectangle([(80, y), (1000, y + 2)], fill=(0, 255, 65, 60))
             y += 40
 
-            # Dados do contexto (ctx pode ser None se não foi passado)
+            # Dados do contexto
             info = []
             if ctx:
                 btc = ctx.get("btc_price")
@@ -513,21 +532,15 @@ def render_sync(html: str, topic: str = "market", ctx: dict | None = None) -> st
 
             if info:
                 for line in info:
-                    _draw_text(draw, (80, y), line, fill=(200, 220, 240), font=font_mid)
+                    _draw_text(draw, (80, y), line, fill=(220, 235, 250), font=font_mid)
                     y += 60
             else:
-                _draw_text(draw, (80, y), "Dados em tempo real da TradeAI", fill=(100, 140, 180), font=font_mid)
+                _draw_text(draw, (80, y), "Dados em tempo real da TradeAI", fill=(160, 190, 220), font=font_mid)
                 y += 60
-
-            # Mensagem central
-            y = max(y + 80, 700)
-            _draw_text(draw, (80, y), "Powered by TradeAI", fill=(60, 90, 120), font=font_small)
-            y += 50
-            _draw_text(draw, (80, y), "Dados em tempo real • Análise • Estratégia", fill=(50, 70, 90), font=font_small)
 
             # Rodapé
             _draw_text(draw, (80, 1280), "DADOS EM TEMPO REAL • ANÁLISE • ESTRATÉGIA",
-                       fill=(50, 70, 90), font=font_small)
+                       fill=(100, 140, 180), font=font_small)
 
             img.save(output_path, "PNG")
             logger.info(f"[biel/html] Fallback PIL: {output_path}")
