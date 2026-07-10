@@ -17,18 +17,16 @@ aptPkgs = [
 PLAYWRIGHT_BROWSERS_PATH = "0"
 
 [phases.install]
-# Um único comando encadeado com "&&" (em vez de itens separados no array):
-# cada item do array "cmds" parece rodar em uma invocação de shell própria
-# nesse builder, perdendo o PATH resolvido (python3/pip) entre um item e o
-# próximo — foi assim que "pip install" funcionou mas o passo seguinte
-# ("python3 -m playwright") deu "python3: command not found" mesmo python3
-# tendo acabado de rodar o pip. Encadear em um shell só evita isso.
+# Nem "python3" nem "playwright" (executáveis) existem no PATH desse builder
+# — só "pip" está linkado (via nixPkgs acima). Mas "pip" É um script Python,
+# e seu shebang (#!/nix/store/.../bin/pythonX.Y) aponta pro interpretador
+# exato usado — extraímos esse caminho absoluto e chamamos "$PYBIN -m X"
+# diretamente, sem depender de nenhum nome estar no PATH.
 cmds = [
-  "pip install --break-system-packages -r requirements.txt && PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 python3 -m playwright install --with-deps chromium-headless-shell"
+  'pip install --break-system-packages -r requirements.txt && PYBIN=$(head -1 "$(command -v pip)" | sed "s/^#!//") && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium-headless-shell'
 ]
 
 [start]
-# python3 -m uvicorn (não "uvicorn" puro) pelo mesmo motivo do playwright
-# acima: o executável do pip install --break-system-packages não fica no
-# PATH nesse ambiente, só o módulo é garantido de estar acessível.
-cmd = "mkdir -p data logs && python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+# Mesmo truque do shebang do pip (ver phases.install) — "python3"/"uvicorn"
+# não existem no PATH desse ambiente em runtime também.
+cmd = 'mkdir -p data logs && PYBIN=$(head -1 "$(command -v pip)" | sed "s/^#!//") && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
