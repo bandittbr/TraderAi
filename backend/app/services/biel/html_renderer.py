@@ -217,7 +217,7 @@ def fill_market_template(ctx: dict) -> str:
     date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
 
     # Background — arte fixa (mapa-múndi + linha de alta), fornecida pelo usuário.
-    bg_image = _load_asset_b64("market_bg.png")
+    bg_image = _load_asset_b64("mercadobk.png")
 
     replacements = {
         "{{DATA_ATUAL}}": date_str,
