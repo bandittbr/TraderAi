@@ -7,6 +7,6 @@ builder = "NIXPACKS"
 # Nem "python3" nem "uvicorn" existem no PATH desse builder Nix — só "pip".
 # Localiza o interpretador python3.XX direto no /nix/store (mais robusto do
 # que tentar interpretar o wrapper do pip) e chama "$PYBIN -m uvicorn" nele.
-startCommand = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f -name "python3.[0-9]*" -path "*/bin/*" 2>/dev/null | head -1) && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
+startCommand = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f \( -name "python3.[0-9]" -o -name "python3.[0-9][0-9]" \) -path "*/bin/*" 2>/dev/null | head -1) && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
 healthcheckPath = "/"
 healthcheckTimeout = 60

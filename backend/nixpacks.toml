@@ -18,17 +18,18 @@ PLAYWRIGHT_BROWSERS_PATH = "0"
 
 [phases.install]
 # Nem "python3" nem "playwright" existem no PATH desse builder — só "pip".
-# Já tentamos ler o shebang/conteúdo do wrapper do pip pra achar o
-# interpretador (deu errado — o wrapper provavelmente delega pra outro
-# arquivo interno em vez de referenciar python3 diretamente em texto). Em
-# vez de depender da implementação do wrapper, procuramos o binário
-# python3.XX direto no /nix/store — ele com certeza existe em algum
-# diretório bin/ ali, já que "pip" só roda porque um python o executa.
+# Localizamos o interpretador python3.XX direto no /nix/store. Cuidado: o
+# padrão "python3.[0-9]*" é ganancioso demais e também casa com
+# "python3.12-config" (um utilitário de build, não o interpretador) — que
+# aparecia ANTES do "python3.12" real na busca e quebrava tudo silenciosamente
+# (rodava "python3.12-config -m playwright ..." e só imprimia o usage dele).
+# Os dois padrões exatos abaixo (1 ou 2 dígitos de versão, sem sufixo) evitam
+# esse falso-positivo.
 cmds = [
-  'pip install --break-system-packages -r requirements.txt && PYBIN=$(find /nix/store -type f -name "python3.[0-9]*" -path "*/bin/*" 2>/dev/null | head -1) && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium-headless-shell'
+  'pip install --break-system-packages -r requirements.txt && PYBIN=$(find /nix/store -type f \( -name "python3.[0-9]" -o -name "python3.[0-9][0-9]" \) -path "*/bin/*" 2>/dev/null | head -1) && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium && PLAYWRIGHT_BROWSERS_PATH=0 "$PYBIN" -m playwright install --with-deps chromium-headless-shell'
 ]
 
 [start]
 # Mesma técnica de phases.install — "python3"/"uvicorn" não existem no PATH
 # em runtime também. Localiza o interpretador direto no /nix/store.
-cmd = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f -name "python3.[0-9]*" -path "*/bin/*" 2>/dev/null | head -1) && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
+cmd = 'mkdir -p data logs && PYBIN=$(find /nix/store -type f \( -name "python3.[0-9]" -o -name "python3.[0-9][0-9]" \) -path "*/bin/*" 2>/dev/null | head -1) && "$PYBIN" -m uvicorn app.main:app --host 0.0.0.0 --port $PORT'
