@@ -49,12 +49,24 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Dimensões ───────────────────────────────────────────────────
+# Os 6 templates reel_*.html têm `body { width:1080px; height:1920px }`
+# fixo no CSS. O Playwright precisa renderizar no viewport NATIVO do
+# template (RENDER_*) — senão, sem full_page=True, o screenshot só
+# captura o recorte do viewport (canto superior esquerdo), cortando o
+# resto do conteúdo (foi exatamente o bug: vídeo mostrando só um pedaço).
+# O vídeo final continua em WIDTH x HEIGHT (720x1280, menor, evita OOM
+# no ffmpeg) — o zoompan faz o downscale de 1080x1920 → 720x1280 usando
+# iw/ih (dimensão real do PNG), então funciona certo com os dois valores
+# diferentes.
+RENDER_WIDTH = 1080
+RENDER_HEIGHT = 1920
+
 # 720x1280 (em vez de 1080x1920): code -9 = SIGKILL confirmou OOM no
 # compose (crossfade decodifica 3 streams + filtro + encode ao mesmo
 # tempo). Resolução é o fator que mais pesa em TODO buffer do pipeline
-# (Playwright, zoompan, decode, xfade, encode) — cortar 44% dos pixels
-# é a alavanca mais forte contra estouro de memória. 720x1280 ainda é
-# HD e aceito sem ressalvas por Reels/TikTok.
+# (zoompan, decode, xfade, encode) — cortar 44% dos pixels é a alavanca
+# mais forte contra estouro de memória. 720x1280 ainda é HD e aceito
+# sem ressalvas por Reels/TikTok.
 WIDTH = 720
 HEIGHT = 1280
 FPS = 30
@@ -175,7 +187,7 @@ def render_scene_image(topic: str, scene_data: dict, scene_name: str) -> str:
             browser = p.chromium.launch(
                 args=["--no-sandbox", "--disable-dev-shm-usage"]
             )
-            page = browser.new_page(viewport={"width": WIDTH, "height": HEIGHT})
+            page = browser.new_page(viewport={"width": RENDER_WIDTH, "height": RENDER_HEIGHT})
             page.set_content(html, wait_until="networkidle")
             # Esperar um pouco para fonts carregarem
             page.wait_for_timeout(500)
