@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { AgentChart } from "@/components/dashboard/AgentChart";
 import WorkerAccount from "@/components/worker/WorkerAccount";
 import WorkerStats from "@/components/worker/WorkerStats";
 import WorkerTrades from "@/components/worker/WorkerTrades";
@@ -37,6 +39,7 @@ interface WorkerAccountData {
 }
 
 export default function WorkerPage() {
+  const { prices } = useWebSocket();
   const [account, setAccount] = useState<WorkerAccountData | null>(null);
   const [stats, setStats] = useState<WorkerStatsData | null>(null);
   const [selectedDays, setSelectedDays] = useState(30);
@@ -80,6 +83,14 @@ export default function WorkerPage() {
 
       {/* Account */}
       {account && <WorkerAccount account={account} />}
+
+      {/* Gráfico com markers de trade em tempo real */}
+      <AgentChart
+        agent="worker"
+        symbol="BTCUSDT"
+        livePrice={prices["BTCUSDT"]}
+        height={350}
+      />
 
       {/* Stats */}
       {stats && <WorkerStats stats={stats} days={selectedDays} onDaysChange={setSelectedDays} />}

@@ -7,6 +7,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { AgentChart } from "@/components/dashboard/AgentChart";
 import {
   getPaperAccount,
   getPaperStats,
@@ -27,6 +29,7 @@ const POLL_INTERVAL_MS = 30_000;
 type TradeFilter = "ALL" | "OPEN" | "CLOSED";
 
 export default function PaperTradingPage() {
+  const { prices } = useWebSocket();
   const [account,  setAccount]  = useState<PaperAccountResponse | null>(null);
   const [stats,    setStats]    = useState<PaperStatsResponse | null>(null);
   const [trades,   setTrades]   = useState<PaperTradeResponse[]>([]);
@@ -97,6 +100,14 @@ export default function PaperTradingPage() {
           <PaperAccountCard account={account} loading={loading} />
           <PaperStatsGrid   stats={stats}     loading={loading} />
         </div>
+
+        {/* Gráfico com markers de trade em tempo real */}
+        <AgentChart
+          agent="paper"
+          symbol="BTCUSDT"
+          livePrice={prices["BTCUSDT"]}
+          height={350}
+        />
 
         {/* Tabela de trades */}
         <div>

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AgentChart } from "./AgentChart";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface AgentEntry {
   name: string;
@@ -60,8 +62,13 @@ export default function AgentesAI() {
     );
   }
 
+  const { prices } = useWebSocket();
+  const [selectedAgent, setSelectedAgent] = useState<string>("paper");
+
   const agents = data?.agents ?? [];
   const best = agents.find((a) => a.best);
+
+  const agentMap = agents.reduce((acc, a) => ({ ...acc, [a.name.toLowerCase()]: a }), {} as Record<string, AgentEntry>);
 
   return (
     <div className="rounded-xl bg-[#0a1020] border border-[#141c2e] overflow-hidden">
@@ -92,13 +99,16 @@ export default function AgentesAI() {
           const color = AGENT_COLORS[agent.name] || "#4a6080";
           const pnlPositive = agent.total_net_pnl_pct >= 0;
           const wrGood = agent.net_win_rate >= 50;
+          const agentKey = agent.name.toLowerCase();
 
           return (
-            <Link
+            <button
               key={agent.name}
-              href={AGENT_LINKS[agent.name] || "/dashboard"}
-              className={`block rounded-lg p-4 transition-all hover:scale-[1.02] border ${
-                agent.best
+              onClick={() => setSelectedAgent(agentKey)}
+              className={`block rounded-lg p-4 transition-all hover:scale-[1.02] border text-left ${
+                selectedAgent === agentKey
+                  ? "bg-gradient-to-br from-purple-900/20 to-blue-900/20 border-purple-500/40 ring-1 ring-purple-500/20"
+                  : agent.best
                   ? "bg-gradient-to-br from-purple-900/20 to-blue-900/20 border-purple-500/30"
                   : "bg-[#060c18] border-[#141c2e] hover:border-[#2a3a5a]"
               }`}
@@ -153,12 +163,21 @@ export default function AgentesAI() {
               {/* Badge de melhor agente */}
               {agent.best && (
                 <div className="mt-2 text-[9px] text-purple-400 font-semibold tracking-wider">
-                  🏆 MELHOR AGENTE
+                  MELHOR AGENTE
                 </div>
               )}
-            </Link>
+            </button>
           );
         })}
+      </div>
+
+      {/* AgentChart — gráfico com markers de trade em tempo real */}
+      <div className="px-4 pb-4">
+        <AgentChart
+          agent={selectedAgent}
+          symbol="BTCUSDT"
+          livePrice={prices["BTCUSDT"]}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { AgentChart } from "@/components/dashboard/AgentChart";
 import ScalperAccount from "@/components/scalper/ScalperAccount";
 import ScalperRisk    from "@/components/scalper/ScalperRisk";
 import ScalperStats   from "@/components/scalper/ScalperStats";
@@ -7,6 +9,7 @@ import ScalperTrades  from "@/components/scalper/ScalperTrades";
 import ScalperSignals from "@/components/scalper/ScalperSignals";
 
 export default function ScalperPage() {
+  const { prices } = useWebSocket();
   const [days, setDays] = useState(30);
 
   return (
@@ -50,6 +53,14 @@ export default function ScalperPage() {
           <ScalperRisk />
         </div>
       </div>
+
+      {/* Gráfico com markers de trade em tempo real */}
+      <AgentChart
+        agent="scalper"
+        symbol="BTCUSDT"
+        livePrice={prices["BTCUSDT"]}
+        height={350}
+      />
 
       {/* Linha 2: Stats */}
       <ScalperStats days={days} />
