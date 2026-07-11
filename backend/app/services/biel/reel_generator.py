@@ -49,8 +49,14 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Dimensões ───────────────────────────────────────────────────
-WIDTH = 1080
-HEIGHT = 1920
+# 720x1280 (em vez de 1080x1920): code -9 = SIGKILL confirmou OOM no
+# compose (crossfade decodifica 3 streams + filtro + encode ao mesmo
+# tempo). Resolução é o fator que mais pesa em TODO buffer do pipeline
+# (Playwright, zoompan, decode, xfade, encode) — cortar 44% dos pixels
+# é a alavanca mais forte contra estouro de memória. 720x1280 ainda é
+# HD e aceito sem ressalvas por Reels/TikTok.
+WIDTH = 720
+HEIGHT = 1280
 FPS = 30
 
 # ── Duração das cenas (total = 15s) ────────────────────────────
@@ -399,7 +405,7 @@ def _build_scene_video(image_path: str, duration: float, zoom_start: float,
         "-t", str(duration),
         "-c:v", "libx264",
         "-threads", "2",
-        "-x264-params", "threads=2:lookahead-threads=1",
+        "-x264-params", "threads=2:lookahead-threads=1:rc-lookahead=10:bframes=0:ref=1",
         "-preset", "fast",
         "-crf", "20",
         "-pix_fmt", "yuv420p",
@@ -505,8 +511,8 @@ def _build_compose_cmd(
         "-map", "[aout]",
         "-c:v", "libx264",
         "-threads", "2",
-        "-x264-params", "threads=2:lookahead-threads=1",
-        "-preset", "medium",
+        "-x264-params", "threads=2:lookahead-threads=1:rc-lookahead=10:bframes=0:ref=1",
+        "-preset", "veryfast",
         "-crf", "20",
         "-c:a", "aac",
         "-b:a", "128k",
