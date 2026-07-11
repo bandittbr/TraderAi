@@ -307,7 +307,7 @@ def _build_subtitle_ass(word_timings: list[dict], output_path: str, group_size: 
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
         "Alignment, MarginL, MarginR, MarginV, Encoding\n"
-        "Style: Default,Arial,58,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,2,2,60,60,190,1\n\n"
+        "Style: Default,DejaVu Sans,58,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,2,2,60,60,190,1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
@@ -409,25 +409,24 @@ def _build_scene_video(image_path: str, duration: float, zoom_start: float,
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     if result.returncode != 0:
         err = _clean_ffmpeg_error(result.stderr)
-        logger.error(f"[biel/reel] Scene video falhou: {err}")
-        raise RuntimeError(f"ffmpeg scene falhou: {err}")
+        logger.error(f"[biel/reel] Scene video falhou (code {result.returncode}): {err}")
+        raise RuntimeError(f"ffmpeg scene falhou (code {result.returncode}): {err}")
 
     return output_path
 
 
-def _compose_final_video(
+def _build_compose_cmd(
     scene_videos: list[str],
     narration_path: str | None,
     music_path: str | None,
     subtitle_path: str | None,
     output_path: str,
     total_duration: float,
-) -> str:
-    """
-    Compõe o vídeo final: cenas com crossfade + legenda queimada
-    (opcional) + narração por voz (principal) mixada com música de
-    fundo ducked (opcional).
-    """
+    burn_subtitles: bool,
+) -> list[str]:
+    """Monta o comando ffmpeg de composição final. `burn_subtitles=False`
+    permite gerar o mesmo vídeo sem o filtro `ass` (usado como fallback
+    caso a legenda esteja causando falha)."""
     n = len(scene_videos)
     fade_dur = CROSSFADE_DURATION
 
@@ -451,7 +450,7 @@ def _compose_final_video(
         video_out = prev
 
     # Legenda queimada (opcional)
-    if subtitle_path and Path(subtitle_path).exists():
+    if burn_subtitles and subtitle_path and Path(subtitle_path).exists():
         escaped = str(subtitle_path).replace("\\", "/").replace(":", "\\:")
         video_filters.append(f"[{video_out}]ass='{escaped}'[vfinal]")
         video_out = "vfinal"
@@ -517,12 +516,51 @@ def _compose_final_video(
         "-movflags", "+faststart",
         output_path,
     ])
+    return cmd
 
+
+def _compose_final_video(
+    scene_videos: list[str],
+    narration_path: str | None,
+    music_path: str | None,
+    subtitle_path: str | None,
+    output_path: str,
+    total_duration: float,
+) -> str:
+    """
+    Compõe o vídeo final: cenas com crossfade + legenda queimada
+    (opcional) + narração por voz (principal) mixada com música de
+    fundo ducked (opcional).
+
+    Se a legenda queimada (`ass=`) fizer o ffmpeg falhar (ex.: build sem
+    fontconfig/fonts configurados no container), tenta de novo sem
+    legenda em vez de derrubar o post inteiro — vídeo sem legenda é
+    melhor que nenhum vídeo.
+    """
+    has_subs = bool(subtitle_path and Path(subtitle_path).exists())
+
+    cmd = _build_compose_cmd(
+        scene_videos, narration_path, music_path, subtitle_path,
+        output_path, total_duration, burn_subtitles=has_subs,
+    )
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+
+    if result.returncode != 0 and has_subs:
+        err = _clean_ffmpeg_error(result.stderr)
+        logger.error(
+            f"[biel/reel] Compose com legenda falhou (code {result.returncode}): {err} "
+            f"— tentando novamente sem legenda queimada"
+        )
+        cmd_retry = _build_compose_cmd(
+            scene_videos, narration_path, music_path, subtitle_path,
+            output_path, total_duration, burn_subtitles=False,
+        )
+        result = subprocess.run(cmd_retry, capture_output=True, text=True, timeout=180)
+
     if result.returncode != 0:
         err = _clean_ffmpeg_error(result.stderr)
-        logger.error(f"[biel/reel] Compose final falhou: {err}")
-        raise RuntimeError(f"ffmpeg compose falhou: {err}")
+        logger.error(f"[biel/reel] Compose final falhou (code {result.returncode}): {err}")
+        raise RuntimeError(f"ffmpeg compose falhou (code {result.returncode}): {err}")
 
     return output_path
 
