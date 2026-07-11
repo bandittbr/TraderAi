@@ -389,8 +389,11 @@ def _build_scene_video(image_path: str, duration: float, zoom_start: float,
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     if result.returncode != 0:
-        logger.error(f"[biel/reel] Scene video falhou: {result.stderr[:300]}")
-        raise RuntimeError(f"ffmpeg scene falhou: {result.stderr[:200]}")
+        # stderr do ffmpeg sempre começa com o banner de versão/configuração
+        # (bem longo) — o erro de verdade fica no final. Pegar os últimos
+        # caracteres em vez dos primeiros, senão só aparece o banner.
+        logger.error(f"[biel/reel] Scene video falhou: {result.stderr[-1500:]}")
+        raise RuntimeError(f"ffmpeg scene falhou: {result.stderr[-500:]}")
 
     return output_path
 
@@ -498,8 +501,8 @@ def _compose_final_video(
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     if result.returncode != 0:
-        logger.error(f"[biel/reel] Compose final falhou: {result.stderr[:500]}")
-        raise RuntimeError(f"ffmpeg compose falhou: {result.stderr[:200]}")
+        logger.error(f"[biel/reel] Compose final falhou: {result.stderr[-1500:]}")
+        raise RuntimeError(f"ffmpeg compose falhou: {result.stderr[-500:]}")
 
     return output_path
 
