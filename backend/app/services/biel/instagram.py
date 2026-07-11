@@ -88,7 +88,10 @@ async def publish_media(
         }
 
         if media_type == "VIDEO":
-            media_data["media_type"] = "VIDEO"
+            # A Graph API descontinuou o valor "VIDEO" pra media_type —
+            # pra publicar vídeo no feed agora é obrigatório usar "REELS"
+            # (mesmo pra vídeo comum, não só Reels de fato).
+            media_data["media_type"] = "REELS"
             media_data["video_url"] = media_url
         else:
             media_data["image_url"] = media_url
