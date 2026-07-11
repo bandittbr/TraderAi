@@ -22,6 +22,22 @@ from app.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+def _clean_ffmpeg_error(stderr: str, max_len: int = 1200) -> str:
+    """
+    O ffmpeg imprime dezenas de linhas de progresso ("frame=0 fps=0.0 ...")
+    que, sem TTY, viram uma linha nova a cada atualização — isso lota
+    qualquer corte por tamanho antes de chegar na mensagem de erro real.
+    Remove essas linhas de progresso e retorna o final do que sobrar.
+    """
+    lines = [
+        l for l in stderr.splitlines()
+        if l.strip() and not l.strip().startswith("frame=")
+    ]
+    cleaned = "\n".join(lines)
+    return cleaned[-max_len:] if len(cleaned) > max_len else cleaned
+
+
 # ── Diretórios ──────────────────────────────────────────────────
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 OUTPUT_DIR = Path("data/biel_reels")
@@ -389,11 +405,9 @@ def _build_scene_video(image_path: str, duration: float, zoom_start: float,
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     if result.returncode != 0:
-        # stderr do ffmpeg sempre começa com o banner de versão/configuração
-        # (bem longo) — o erro de verdade fica no final. Pegar os últimos
-        # caracteres em vez dos primeiros, senão só aparece o banner.
-        logger.error(f"[biel/reel] Scene video falhou: {result.stderr[-1500:]}")
-        raise RuntimeError(f"ffmpeg scene falhou: {result.stderr[-500:]}")
+        err = _clean_ffmpeg_error(result.stderr)
+        logger.error(f"[biel/reel] Scene video falhou: {err}")
+        raise RuntimeError(f"ffmpeg scene falhou: {err}")
 
     return output_path
 
@@ -501,8 +515,9 @@ def _compose_final_video(
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     if result.returncode != 0:
-        logger.error(f"[biel/reel] Compose final falhou: {result.stderr[-1500:]}")
-        raise RuntimeError(f"ffmpeg compose falhou: {result.stderr[-500:]}")
+        err = _clean_ffmpeg_error(result.stderr)
+        logger.error(f"[biel/reel] Compose final falhou: {err}")
+        raise RuntimeError(f"ffmpeg compose falhou: {err}")
 
     return output_path
 
