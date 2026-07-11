@@ -275,10 +275,32 @@ class TradeEngine:
             status      = TradeStatus.OPEN.value,
         )
         session.add(trade)
+        await session.flush()  # flush para obter o ID do trade
+
         logger.info(
             f"[TradeEngine] ABERTO  {sig.symbol} {side} @ {sig.price:.4f} "
             f"qty={quantity:.6f} risk=${risk_effective:.2f} conf={sig.confidence:.0f}%"
         )
+
+        # Log de atividade + broadcast WebSocket
+        try:
+            from app.services.trade_activity import log_activity
+            account_result = await session.execute(select(PaperAccount).limit(1))
+            account = account_result.scalar_one_or_none()
+            await log_activity(
+                agent="paper",
+                event="open",
+                symbol=sig.symbol,
+                price=sig.price,
+                trade_id=trade.id,
+                quantity=quantity,
+                side=side,
+                confidence=sig.confidence,
+                regime=regime_label,
+                balance_after=account.balance if account else None,
+            )
+        except Exception as e:
+            logger.debug(f"[TradeActivity] Falha ao logar abertura: {e}")
 
     # ── Regras de fechamento ──────────────────────────────────────────────────
 
@@ -319,7 +341,11 @@ class TradeEngine:
         """Fecha o trade, calcula PnL (LONG ou SHORT) e atualiza saldo."""
         side  = trade.trade_side
         entry = trade.entry_price
+        # FIX: após Partial TP1 a quantidade restante é menor — usar a cheia
+        # contava o lucro da parcial duas vezes no saldo.
         qty   = trade.quantity
+        if getattr(trade, "tp1_hit", False) and getattr(trade, "remaining_quantity", None):
+            qty = trade.remaining_quantity
 
         if side == TradeSide.LONG.value:
             pnl     = (exit_price - entry) * qty
@@ -361,6 +387,27 @@ class TradeEngine:
             f"gross={pnl_pct:+.3f}% net={net_pnl_pct_val:+.3f}% "
             f"motivo={reason} [{outcome}]"
         )
+
+        # Log de atividade + broadcast WebSocket
+        try:
+            from app.services.trade_activity import log_activity
+            await log_activity(
+                agent="paper",
+                event="close",
+                symbol=trade.symbol,
+                price=exit_price,
+                trade_id=trade.id,
+                quantity=qty,
+                side=side,
+                pnl=round(pnl_net, 6),
+                pnl_pct=net_pnl_pct_val,
+                reason=reason,
+                regime=regime_label,
+                balance_after=account.balance if account else None,
+                extra={"exit_score": exit_score, "gross_pnl_pct": pnl_pct_rounded},
+            )
+        except Exception as e:
+            logger.debug(f"[TradeActivity] Falha ao logar fechamento: {e}")
 
         # V7.11: registra resultado no circuit breaker (net, fee-ajustado)
         paper_risk.record_trade(won=(net_pnl_pct_val > 0), regime=regime_label)

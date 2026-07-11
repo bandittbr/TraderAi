@@ -44,6 +44,102 @@ TOPIC_PROMPTS = {
     "news":    "Comente sobre as notícias recentes de cripto e como elas podem impactar o mercado.",
 }
 
+# ═══════════════════════════════════════════════════════════════════
+#  REEL PROMPTS — JSON estruturado para templates 9:16
+# ═══════════════════════════════════════════════════════════════════
+REEL_PROMPTS = {
+    "meme": """
+IMPORTANTE: Retorne APENAS UM JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": legenda do reel para Instagram (máx 300 chars + hashtags, personalidade Biel)
+2. "hook": frase de impacto para o topo (máx 50 chars, UPPERCASE, chamativa)
+3. "hook_sub": complemento do hook (máx 60 chars)
+4. "content": texto principal do meme (máx 100 chars, pode usar <span class="highlight">para destaque)
+5. "content_sub": complemento/contexto (máx 80 chars)
+6. "cta": call to action final (máx 40 chars)
+
+Exemplo: {"caption": "Quando o BTC cai 10%... 😂\\n\\n#BTC #Meme #Crypto", "hook": "O MERCADO HOJE", "hook_sub": "Todo trader identifica", "content": "COMPROU NO TOPO", "content_sub": "E agora tá esperando voltar", "cta": "SEGUE PRA MAIS"}
+""",
+    "noticias": """
+IMPORTANTE: Retorne APENAS UM JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": legenda do reel para Instagram (máx 300 chars + hashtags, personalidade Biel)
+2. "headline": manchete principal (máx 80 chars, UPPERCASE)
+3. "summary": resumo curto (máx 120 chars)
+4. "impacts": array com 3 objetos [label, value, is_positive] — ex: ["Preço ETH", "+8.5%", true]
+5. "source": Fonte da notícia
+6. "cta": call to action (máx 40 chars)
+
+Exemplo: {"caption": "ETF de ETH aprovado!...\\n\\n#Ethereum #Crypto", "headline": "SEC APROVA ETF SPOT DE ETHEREUM", "summary": "Marco histórico para o mercado cripto.", "impacts": [["Preço ETH", "+8.5%", true], ["Volume DEX", "+$420M", true], ["Sentimento", "EUFÓRICO", true]], "source": "CoinDesk", "cta": "FIQUE POR DENTRO"}
+""",
+    "insight": """
+IMPORTANTE: Retorne APENAS UM JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": legenda do reel para Instagram (máx 300 chars + hashtags, personalidade Biel)
+2. "question": pergunta provocativa (máx 80 chars, UPPERCASE)
+3. "insights": array com 3 objetos, cada um com "icon" (emoji), "title" (máx 30 chars, UPPERCASE), "desc" (máx 100 chars)
+4. "ai_summary": resumo final (máx 120 chars)
+5. "cta": call to action (máx 40 chars)
+
+Ícones relevantes: 📊 💧 📈 📉 🔥 🛡️ ⚡ 🧠 🏦 🔗 🌐 💎 🎯
+
+Exemplo: {"caption": "O que os dados mostram?...\\n\\n#Insight #Crypto", "question": "O QUE OS DADOS ESTÃO MOSTRANDO?", "insights": [{"icon": "📊", "title": "ACUMULAÇÃO", "desc": "Baleias comprando..."}, {"icon": "💧", "title": "LIQUIDEZ", "desc": "Fluxo crescendo..."}, {"icon": "📈", "title": "TENDÊNCIA", "desc": "Estrutura altista..."}], "ai_summary": "Cenário misto mas construtivo.", "cta": "SALVA ESSE POST"}
+""",
+    "profits": """
+IMPORTANTE: Retorne APENAS UM JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": legenda do reel para Instagram (máx 300 chars + hashtags, personalidade Biel)
+2. "pnl_value": valor do P&L formatado (ex: "+$1.250" ou "-$320")
+3. "pnl_pct": percentual do P&L (ex: "+12.5%")
+4. "win_rate": win rate (ex: "75%")
+5. "saldo": saldo atual formatado (ex: "$11.250")
+6. "trades_today": número de trades hoje (ex: "8")
+7. "best_trade": melhor trade (ex: "+$450")
+8. "trades_list": array com até 3 objetos {symbol, pnl, is_win} — ex: [{"symbol": "BTC", "pnl": "+$320", "is_win": true}]
+9. "cta": call to action (máx 40 chars)
+
+IMPORTANTE: Use os dados REAIS do contexto. Nunca invente valores.
+
+Exemplo: {"caption": "Resultado do dia! +$1.250 no P&L 🎯\\n\\n#Trading #Profits", "pnl_value": "+$1.250", "pnl_pct": "+12.5%", "win_rate": "75%", "saldo": "$11.250", "trades_today": "8", "best_trade": "+$450", "trades_list": [{"symbol": "BTCUSDT", "pnl": "+$320", "is_win": true}, {"symbol": "ETHUSDT", "pnl": "+$180", "is_win": true}, {"symbol": "SOLUSDT", "pnl": "-$50", "is_win": false}], "cta": "SIGA PRA MAIS"}
+""",
+    "erros": """
+IMPORTANTE: Retorne APENAS UM JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": legenda do reel para Instagram (máx 300 chars + hashtags, personalidade Biel)
+2. "title": título principal do erro (máx 60 chars, UPPERCASE)
+3. "subtitle": contexto do erro (máx 100 chars)
+4. "error_1_title": primeiro erro cometido (máx 40 chars)
+5. "error_1_desc": descrição do primeiro erro (máx 120 chars)
+6. "error_2_title": segundo erro (máx 40 chars)
+7. "error_2_desc": descrição do segundo erro (máx 120 chars)
+8. "lesson": aprendizado principal (máx 120 chars)
+9. "cta": call to action (máx 40 chars)
+
+IMPORTANTE: Use erros REAIS dos trades do contexto. Seja honesto e educativo.
+
+Exemplo: {"caption": "Erros que cometi hoje... e o que aprendi\\n\\n#Aprendizado #Trading", "title": "PERDI $200 HOJE", "subtitle": "Dois erros que todo trader comete", "error_1_title": "ENTRADA SEM CONFIRMAÇÃO", "error_1_desc": "Entrei na posição sem esperar o confirmar do indicador. Resultado: stop loss batido.", "error_2_title": "TAMANHO DE POSIÇÃO GRANDE", "error_2_desc": "Usei 5% da conta numa única operação. Risco desnecessário.", "lesson": "Sempre confirme o sinal e use no máximo 2% por trade.", "cta": "NÃO COMETA ESSE ERRO"}
+""",
+    "aprendizados": """
+IMPORTANTE: Retorne APENAS UM JSON válido (sem markdown, sem ```, sem texto extra).
+
+O JSON deve conter:
+1. "caption": legenda do reel para Instagram (máx 300 chars + hashtags, personalidade Biel)
+2. "title": título do aprendizado (máx 60 chars, UPPERCASE)
+3. "tips": array com 3 objetos, cada um com "title" (máx 40 chars, UPPERCASE) e "desc" (máx 120 chars)
+4. "takeaway": takeaway principal (máx 120 chars)
+5. "cta": call to action (máx 40 chars)
+
+IMPORTANTE: Baseie os aprendizados nos dados REAIS de trades e resultados do contexto.
+
+Exemplo: {"caption": "3 dicas que mudaram meu trading\\n\\n#Aprendizado #Dicas", "title": "3 DICAS QUE MUDARAM TUDO", "tips": [{"title": "GESTÃO DE RISCO", "desc": "Nunca arrisque mais de 2% da conta por trade. Isso te mantém no jogo."}, {"title": "AGUARDE O SETUP", "desc": "Paciência é lucro. Só entre com confirmação clara do indicador."}, {"title": "LOG DE TRADES", "desc": "Anote cada trade. O padrão que você não vê no gráfico aparece no log."}], "takeaway": "Consistência > Lucro rápido. Small wins constroem grandes resultados.", "cta": "SALVA E COMPARTILHA"}
+""",
+}
+
 # Prompt extra para gerar dados visuais estruturados (INSIGHTS e NOTÍCIA)
 # O LLM deve retornar UM ÚNICO JSON contendo: caption (post Instagram) + visual data
 STRUCTURED_PROMPTS = {
@@ -85,23 +181,32 @@ def _detect_provider(api_key: str) -> str:
     return "gemini"
 
 
+REEL_TOPIC_KEYS = ["meme", "noticias", "insight", "profits", "erros", "aprendizados"]
+
+
 async def generate_post(context: dict, topic: str, api_key: str) -> dict:
     """
     Gera um post para o Instagram.
     
     Retorna dict:
-      {"caption": "texto do post"} — para market/trade
-      {"caption": "texto", "visual": {...}} — para insight/news (com dados estruturados)
+      {"caption": "texto do post"} — para market/trade (imagens)
+      {"caption": "texto", "visual": {...}} — para insight/news (imagens, dados estruturados)
+      {"caption": "texto", "reel": {...}} — para reels (dados estruturados do reel)
     """
     provider = _detect_provider(api_key)
     logger.info(f"[biel/brain] Provider detectado: {provider}")
 
+    is_reel = topic in REEL_TOPIC_KEYS
     topic_instruction = TOPIC_PROMPTS.get(topic, TOPIC_PROMPTS["market"])
     context_text = _format_context(context)
 
-    structured_instruction = STRUCTURED_PROMPTS.get(topic, "")
-
-    max_tokens = 800 if topic in ("insight", "news") else 400
+    # Determinar prompt estruturado e max_tokens
+    if is_reel:
+        structured_instruction = REEL_PROMPTS.get(topic, "")
+        max_tokens = 1200  # Reels precisam de mais tokens (JSON grande)
+    else:
+        structured_instruction = STRUCTURED_PROMPTS.get(topic, "")
+        max_tokens = 800 if topic in ("insight", "news") else 400
 
     prompt = f"""{topic_instruction}
 
@@ -117,13 +222,20 @@ Gere um post para o Instagram seguindo as instruções de personalidade.
     else:
         raw = await _generate_gemini(api_key, prompt, max_tokens)
 
-    # Tentar extrair JSON do retorno (para insight/news)
+    # Tentar extrair JSON do retorno
+    if is_reel:
+        result = _try_extract_reel(raw, topic)
+        if result:
+            logger.info(f"[biel/brain] JSON de reel extraído para {topic}")
+            return result
+        logger.warning(f"[biel/brain] Falha ao extrair JSON de reel para {topic}, usando fallback")
+        return _reel_fallback(raw, topic)
+
     if topic in ("insight", "news"):
         result = _try_extract_structured(raw, topic)
         if result:
             logger.info(f"[biel/brain] JSON estruturado extraído para {topic}")
             return result
-        # Fallback: se não conseguir parsear, retorna só caption
         logger.warning(f"[biel/brain] Falha ao extrair JSON para {topic}, retornando só caption")
 
     return {"caption": raw.strip()}
@@ -185,6 +297,118 @@ def _try_extract_structured(raw: str, topic: str = "") -> dict | None:
         return {"caption": caption, "visual": data}
 
     return None
+
+
+def _try_extract_reel(raw: str, topic: str) -> dict | None:
+    """
+    Tenta extrair JSON estruturado de um reel da resposta da IA.
+    Retorna {"caption": ..., "reel": {...}} se sucesso.
+    """
+    import json
+    import re
+
+    text = raw.strip()
+
+    # Remove ```json ... ``` se existir
+    code_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+    if code_match:
+        text = code_match.group(1).strip()
+
+    # Encontra o primeiro { e último }
+    brace_start = text.find('{')
+    brace_end = text.rfind('}')
+    if brace_start == -1 or brace_end == -1:
+        return None
+
+    json_str = text[brace_start:brace_end + 1]
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        cleaned = re.sub(r',\s*}', '}', json_str)
+        cleaned = re.sub(r',\s*]', ']', cleaned)
+        cleaned = re.sub(r'[\u201c\u201d]', '"', cleaned)
+        cleaned = re.sub(r"[\u2018\u2019]", "'", cleaned)
+        try:
+            data = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return None
+
+    if "caption" in data:
+        # Separar caption do resto (dados do reel)
+        reel_data = {k: v for k, v in data.items() if k != "caption"}
+        return {"caption": data["caption"], "reel": reel_data}
+
+    return None
+
+
+def _reel_fallback(raw: str, topic: str) -> dict:
+    """
+    Fallback quando não consegue extrair JSON de reel.
+    Gera dados básicos a partir do texto cru.
+    """
+    caption = raw.strip()[:300]
+
+    # Dados fallback por topic
+    fallbacks = {
+        "meme": {
+            "hook": "MEME DO DIA",
+            "hook_sub": "Todo trader identifica",
+            "content": "O MERCADO HOJE",
+            "content_sub": "Quando o plano não sobrevive ao primeiro contato",
+            "cta": "SEGUE PRA MAIS",
+        },
+        "noticias": {
+            "headline": "ATUALIZAÇÃO DO MERCADO",
+            "summary": "Acompanhe os últimos acontecimentos.",
+            "impacts": [["BTC", "—", True], ["SENTIMENTO", "NEUTRO", True], ["VOLUME", "—", True]],
+            "source": "TradeAI",
+            "cta": "FIQUE POR DENTRO",
+        },
+        "insight": {
+            "question": "O QUE OS DADOS MOSTRAM?",
+            "insights": [
+                {"icon": "📊", "title": "ANÁLISE", "desc": "Dados indicam movimento importante."},
+                {"icon": "💧", "title": "LIQUIDEZ", "desc": "Fluxo mudando no mercado."},
+                {"icon": "📈", "title": "TENDÊNCIA", "desc": "Estrutura formando."},
+            ],
+            "ai_summary": "Cenário em desenvolvimento.",
+            "cta": "SALVA ESSE POST",
+        },
+        "profits": {
+            "pnl_value": "—",
+            "pnl_pct": "—",
+            "win_rate": "—",
+            "saldo": "—",
+            "trades_today": "0",
+            "best_trade": "—",
+            "trades_list": [],
+            "cta": "SIGA PRA MAIS",
+        },
+        "erros": {
+            "title": "ERROS DO DIA",
+            "subtitle": "Aprendendo com os erros",
+            "error_1_title": "ERRO 1",
+            "error_1_desc": "Análise indevida do mercado.",
+            "error_2_title": "ERRO 2",
+            "error_2_desc": "Gestão de risco precária.",
+            "lesson": "Sempre gerencie o risco e analise o mercado.",
+            "cta": "NÃO COMETA ESSE ERRO",
+        },
+        "aprendizados": {
+            "title": "APRENDIZADOS DO DIA",
+            "tips": [
+                {"title": "DICA 1", "desc": "Mantenha a disciplina em qualquer situação."},
+                {"title": "DICA 2", "desc": "Analise seus erros para melhorar."},
+                {"title": "DICA 3", "desc": "Não entre na posição sem confirmação."},
+            ],
+            "takeaway": "Consistência é a chave do sucesso.",
+            "cta": "SALVA E COMPARTILHA",
+        },
+    }
+
+    reel_data = fallbacks.get(topic, fallbacks["insight"])
+    return {"caption": caption, "reel": reel_data}
 
 
 async def _generate_groq(api_key: str, prompt: str, max_tokens: int = 400) -> str:

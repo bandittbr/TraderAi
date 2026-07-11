@@ -381,17 +381,19 @@ async def _process_signal_for_paper_trading(symbol: str, tf: str, ind) -> None:
         if tf == "1h":
             try:
                 from app.services.worker.trade_engine import worker_engine
-                # Worker usa 1h para direção + tenta 15m para entrada
-                price_15m = None
+                # Worker usa 1h para direção + 15m para entrada
+                # FIX: store.get_indicator_15m não existia — o Worker sempre caía
+                # no fallback e usava o indicador 1h como se fosse 15m.
+                ind_15m = None
                 try:
-                    from app.services.market_data.store import store as _mstore
-                    price_15m = await _mstore.get_indicator_15m(symbol)
+                    ind_15m = await indicator_calculator.get_latest(symbol, "15m")
                 except Exception:
                     pass
                 await worker_engine.process_signal(
-                    symbol=symbol, price_1h=ind, price_15m=price_15m or ind,
+                    symbol=symbol, price_1h=ind, price_15m=ind_15m or ind,
                     regime=regime_result, context=context,
                     structure=structure, smc=smc, weights=weights,
+                    current_price=price,  # FIX: MarketIndicator não tem .close/.price
                 )
             except Exception as _we:
                 logger.debug("[worker] skip: %s", _we)

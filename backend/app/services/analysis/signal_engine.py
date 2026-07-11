@@ -250,7 +250,8 @@ def generate_signal(
 
     buy_count  = len(buy_reasons)
     sell_count = len(sell_reasons)
-    total_max  = 13 if (has_structure and has_smc) else (9 if has_structure else (13 if has_smc else 6))
+    # 6 técnicos + 3 estruturais + 4 SMC — FIX: smc-only era 13 (deflacionava score)
+    total_max  = 13 if (has_structure and has_smc) else (9 if has_structure else (10 if has_smc else 6))
 
     if regime_key not in ("UNKNOWN",):
         regime_note = f"[Regime: {regime_key}] min_buy={buy_min}, min_sell={sell_min}"

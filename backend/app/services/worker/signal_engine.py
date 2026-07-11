@@ -71,6 +71,7 @@ class WorkerSignalEngine:
         structure:   Optional[Any] = None,   # MarketStructureResult
         smc:         Optional[Any] = None,   # SmartMoneyResult
         weights:     Optional[dict] = None,  # Pesos adaptativos V6
+        current_price: Optional[float] = None,  # preço atual (MarketIndicator não tem close)
     ) -> WorkerSignalResult:
         """
         Análise completa multi-timeframe.
@@ -86,9 +87,9 @@ class WorkerSignalEngine:
                 stop_loss=0, reason="Sem dados", is_valid=False,
             )
 
-        current_price = price_15m.close if hasattr(price_15m, "close") else (
-            price_15m.price if hasattr(price_15m, "price") else 0.0
-        )
+        # Preço atual: usa o parâmetro explícito; fallback para atributos do indicador
+        if current_price is None or current_price <= 0:
+            current_price = getattr(price_15m, "close", None) or getattr(price_15m, "price", None) or 0.0
         if current_price <= 0:
             return WorkerSignalResult(
                 direction="NEUTRAL", confidence=0, direction_score=0,
@@ -97,7 +98,7 @@ class WorkerSignalEngine:
             )
 
         regime_label = regime.regime.name if regime and regime.regime else "UNKNOWN"
-        atr_pct = self._get_atr_pct(price_15m)
+        atr_pct = self._get_atr_pct(price_15m, current_price)
 
         # ── 1. Direção primária (timeframe 1h) ──────────────────────────────
         dir_score, dir_signal, dir_reason = self._compute_direction_bias(
@@ -267,17 +268,19 @@ class WorkerSignalEngine:
 
         macd = getattr(ind_15m, "macd", None)
         macd_sig = getattr(ind_15m, "macd_signal", None)
-        if macd and macd_sig and macd > macd_sig:
-            tech += 10.0
-        elif macd and macd_sig and macd < macd_sig:
-            tech -= 10.0
+        if macd is not None and macd_sig is not None:
+            if macd > macd_sig:
+                tech += 10.0
+            elif macd < macd_sig:
+                tech -= 10.0
 
         e9 = getattr(ind_15m, "ema_9", None)
         e21 = getattr(ind_15m, "ema_21", None)
-        if e9 and e21 and e9 > e21:
-            tech += 5.0
-        elif e9 and e21 and e9 < e21:
-            tech -= 5.0
+        if e9 is not None and e21 is not None:
+            if e9 > e21:
+                tech += 5.0
+            elif e9 < e21:
+                tech -= 5.0
         scores["technical"] = tech
 
         # Structure
@@ -354,13 +357,23 @@ class WorkerSignalEngine:
         module_scores: dict[str, float],
         direction: str,
     ) -> float:
-        """Média ponderada do score de direção + scores modulares."""
-        weighted_sum = dir_score * 0.35  # direção primária pesa 35%
+        """
+        Média ponderada do score de direção + scores modulares.
+        FIX: para SHORT usa (100 - dir_score) como base (simétrico ao LONG)
+        e considera o SINAL do módulo — só módulos alinhados à direção somam.
+        (Antes, SHORT nunca atingia MIN_CONFIDENCE e módulos bearish
+        contavam a favor de LONG por causa do abs().)
+        """
+        if direction == "NEUTRAL":
+            return 0.0
+
+        base = dir_score if direction == "LONG" else (100.0 - dir_score)
+        weighted_sum = base * 0.35  # direção primária pesa 35%
 
         for module, score in module_scores.items():
             w = MODULE_WEIGHTS.get(module, 0.10)
-            abs_score = abs(score) * (1 if direction == "LONG" else -1)
-            weighted_sum += max(0, abs_score) * w * 100 / 20  # normaliza
+            aligned = score if direction == "LONG" else -score
+            weighted_sum += max(0.0, aligned) * w * 5.0  # normaliza (100/20)
 
         return min(100, max(0, weighted_sum))
 
@@ -401,10 +414,10 @@ class WorkerSignalEngine:
         return 1
 
     @staticmethod
-    def _get_atr_pct(indicator: Any) -> float:
-        """Extrai ATR% do indicador."""
+    def _get_atr_pct(indicator: Any, current_price: Optional[float] = None) -> float:
+        """Extrai ATR% (fração) do indicador, usando o preço atual quando fornecido."""
         atr = getattr(indicator, "atr", None)
-        price = getattr(indicator, "close", None) or getattr(indicator, "price", None)
+        price = current_price or getattr(indicator, "close", None) or getattr(indicator, "price", None)
         if atr and price and price > 0:
             return atr / price
         return 0.01  # fallback 1%

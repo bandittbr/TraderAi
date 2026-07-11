@@ -53,13 +53,17 @@ def _ema(values: list[float], period: int) -> float:
     return val
 
 def _rsi(closes: list[float], period: int = 14) -> float:
+    """RSI com suavização de Wilder — consistente com app.services.indicators.rsi."""
     if len(closes) < period + 1:
         return 50.0
     diffs  = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
     gains  = [max(d, 0.0) for d in diffs]
     losses = [max(-d, 0.0) for d in diffs]
-    ag     = sum(gains[-period:])  / period
-    al     = sum(losses[-period:]) / period
+    ag     = sum(gains[:period])  / period
+    al     = sum(losses[:period]) / period
+    for i in range(period, len(diffs)):
+        ag = (ag * (period - 1) + gains[i]) / period
+        al = (al * (period - 1) + losses[i]) / period
     if al == 0:
         return 100.0
     rs = ag / al
@@ -194,7 +198,7 @@ def _confirm_5m(candles_5m, trend: str) -> tuple[bool, float | None, str | None,
 
     closes = _closes(candles_5m)
     price  = closes[-1]
-    rsi    = _rsi(closes[-20:])
+    rsi    = _rsi(closes)  # FIX: usa histórico completo (antes truncava em 20)
     ema9   = _ema(closes, 9)
     ema21  = _ema(closes, 21)
 
@@ -249,7 +253,7 @@ def _entry_1m(candles_1m, trend: str) -> tuple[bool, float | None, list[str]]:
         return False, None, ["1m: candles insuficientes"]
 
     closes = _closes(candles_1m)
-    rsi    = _rsi(closes[-20:])
+    rsi    = _rsi(closes)  # FIX: usa histórico completo (antes truncava em 20)
     hist   = _macd_histogram(closes)
     last   = candles_1m[-1]
     prev   = candles_1m[-2]

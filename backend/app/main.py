@@ -55,6 +55,11 @@ async def lifespan(app: FastAPI):
     biel_tasks = await start_biel_scheduler()
     bg_tasks.extend(biel_tasks)
 
+    # Backup automático do banco de dados (a cada 6h)
+    from app.services.db_backup import start_backup_scheduler
+    backup_tasks = await start_backup_scheduler()
+    bg_tasks.extend(backup_tasks)
+
     logger.info("Sistema pronto para receber requisições.")
 
     yield  # Servidor em execução

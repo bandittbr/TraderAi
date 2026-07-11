@@ -22,6 +22,11 @@ TRAILING_TRIGGER_PCT = 0.0040  # Trailing ativa em +0.40%
 TRAILING_DIST_PCT   = 0.0015   # Distância trailing 0.15%
 MAX_TRADE_MINUTES   = 120      # Time stop: 2h
 
+# V7.11 — Fee & slippage modeling (módulo-level para uso em BE e fechamento)
+FEE_PER_LEG        = 0.0006   # 0.06% taker
+SLIPPAGE_LEG       = 0.0002   # 0.02% slippage
+FEE_SLIPPAGE_TOTAL = (FEE_PER_LEG + SLIPPAGE_LEG) * 2  # 0.16% entrada + saída
+
 INITIAL_BALANCE     = 10_000.0
 
 
@@ -116,18 +121,37 @@ class ScalperTradeEngine:
             confidence        = sig.confidence,
             entry_price       = price,
             quantity          = qty,
-            risk_usd          = round(RISK_USD_PER_TRADE * (sig.confidence / 100), 2) if sig.confidence > 0 else RISK_USD_PER_TRADE,
+            risk_usd          = round(risk_amount, 2),  # FIX: era inconsistente com o risco real usado no sizing
             stop_loss_price   = sl_price,
             take_profit_price = tp_price,
             break_even_price  = be_price,
             status            = "OPEN",
         )
         session.add(trade)
+        await session.flush()  # flush para obter o ID do trade
         logger.info(
             f"[Scalper] ABERTO {sig.symbol} {side} @ {price:.4f} "
             f"SL={sl_price:.4f} ({sl_pct*100:.3f}%) TP={tp_price:.4f} ({tp_pct*100:.3f}%) "
             f"conf={sig.confidence:.0f}% atr={atr_pct}%"
         )
+
+        # Log de atividade + broadcast WebSocket
+        try:
+            from app.services.trade_activity import log_activity
+            acc = await self._get_or_create_account(session)
+            await log_activity(
+                agent="scalper",
+                event="open",
+                symbol=sig.symbol,
+                price=price,
+                trade_id=trade.id,
+                quantity=qty,
+                side=side,
+                confidence=sig.confidence,
+                balance_after=acc.balance,
+            )
+        except Exception as e:
+            logger.debug(f"[TradeActivity] Falha ao logar abertura scalper: {e}")
 
     # ── Gerenciar trade aberto ────────────────────────────────────────────────
     async def _manage_open_trade(
@@ -171,7 +195,11 @@ class ScalperTradeEngine:
                      (side == "SHORT" and price <= trade.break_even_price)
             if be_hit:
                 trade.break_even_activated = True
-                trade.stop_loss_price      = trade.entry_price  # BE = entrada
+                # BE cobre taxas (0.16% round-trip) — fechar no BE = net ~0, não -0.16%
+                if side == "LONG":
+                    trade.stop_loss_price = round(trade.entry_price * (1 + FEE_SLIPPAGE_TOTAL), 8)
+                else:
+                    trade.stop_loss_price = round(trade.entry_price * (1 - FEE_SLIPPAGE_TOTAL), 8)
                 logger.debug(f"[Scalper] {trade.symbol} Break Even ativado @ {price:.4f}")
 
         # ── 5. Trailing Stop ──────────────────────────────────────────────────
@@ -219,10 +247,7 @@ class ScalperTradeEngine:
                         * (1 if trade.trade_side == "LONG" else -1), 6)
         pnl_pct_rounded = round(pnl_pct * 100, 4)
 
-        # V7.11 — Fee & slippage modeling (0.06% entrada + 0.06% saída)
-        FEE_PER_LEG       = 0.0006   # 0.06% taker
-        SLIPPAGE_LEG      = 0.0002   # 0.02% slippage
-        FEE_SLIPPAGE_TOTAL = (FEE_PER_LEG + SLIPPAGE_LEG) * 2  # entrada + saída
+        # V7.11 — Fee & slippage modeling (constantes módulo-level)
         fee_pct  = round(FEE_SLIPPAGE_TOTAL * 100, 4)  # em %
         net_pnl  = round(pnl_pct_rounded - fee_pct, 4)
 
@@ -268,19 +293,41 @@ class ScalperTradeEngine:
             f"net={net_pnl:+.3f}% motivo={reason}"
         )
 
+        # Log de atividade + broadcast WebSocket
+        try:
+            from app.services.trade_activity import log_activity
+            await log_activity(
+                agent="scalper",
+                event="close",
+                symbol=trade.symbol,
+                price=exit_price,
+                trade_id=trade.id,
+                quantity=trade.quantity,
+                side=trade.trade_side,
+                pnl=round(pnl_usd_net, 6),
+                pnl_pct=net_pnl,  # FIX: net_pnl já está em % (antes multiplicava ×100 de novo)
+                reason=reason,
+                balance_after=acc.balance,
+            )
+        except Exception as e:
+            logger.debug(f"[TradeActivity] Falha ao logar fechamento scalper: {e}")
+
         # Registra no risk manager (usando net_pnl — V7.11)
         regime = getattr(trade, "trend_15m", None)
         await scalper_risk.record_trade(net_pnl, won, regime=regime)
 
     # ── Debug info ────────────────────────────────────────────────────────────
     async def get_debug_info(self) -> dict:
+        from sqlalchemy import func as sqlfunc
         async with AsyncSessionLocal() as session:
             acc        = await self._get_or_create_account(session)
             open_count = await session.scalar(
-                select(ScalperTrade).where(ScalperTrade.status == "OPEN")
+                select(sqlfunc.count()).select_from(ScalperTrade)
+                .where(ScalperTrade.status == "OPEN")
             )
         await scalper_risk.load_today()
         return {
+            "open_trades":          open_count or 0,
             "signals_processed":    self._signals_processed,
             "last_execution":       self._last_execution.isoformat() if self._last_execution else None,
             "balance":              acc.balance,

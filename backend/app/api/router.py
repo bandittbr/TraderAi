@@ -8,6 +8,7 @@ from app.api.endpoints import (
     health, market, indicators, paper_trading, market_context,
     analytics, market_structure, smart_money, optimizer, alpha,
     robustness, strategies, trade_management, scalper, biel, worker,
+    trade_activity,
 )
 
 # Roteador raiz -- prefixo /api/v1 aplicado no main.py
@@ -68,6 +69,9 @@ router.include_router(worker.router, prefix="/agents", tags=["Agents"])
 
 # -- Fase 14: Biel Instagram Agent ------------------------------------
 router.include_router(biel.router, prefix="/biel", tags=["Biel"])
+
+# -- Trade Activity Log (agentes em tempo real) ----------------------------
+router.include_router(trade_activity.router, prefix="/agents", tags=["Trade Activity"])
 
 # -- Placeholders ----------------------------------------------------------
 # router.include_router(broker.router,   prefix="/broker",   tags=["Corretora"])

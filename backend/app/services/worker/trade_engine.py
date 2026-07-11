@@ -61,6 +61,7 @@ class WorkerTradeEngine:
         structure:  Any = None,
         smc:        Any = None,
         weights:    Optional[dict] = None,
+        current_price: Optional[float] = None,
     ) -> None:
         """Processa dados de mercado e decide se abre/fecha trades."""
         try:
@@ -69,6 +70,7 @@ class WorkerTradeEngine:
                 symbol=symbol, price_1h=price_1h, price_15m=price_15m,
                 regime=regime, context=context,
                 structure=structure, smc=smc, weights=weights,
+                current_price=current_price,
             )
 
             # Gerencia trades abertos (SL/TP/BE/Trailing)
@@ -77,9 +79,11 @@ class WorkerTradeEngine:
                 for trade in open_trades:
                     await self._manage_open_trade(session, trade, sig)
 
-                # Abre novo trade se sinal válido
-                if sig.is_valid and len(open_trades) < MAX_OPEN_TRADES:
-                    await self._open_trade(session, sig)
+                # Abre novo trade se sinal válido (1 posição por símbolo)
+                total_open = await self._get_open_trades(session)
+                if sig.is_valid and not open_trades and len(total_open) < MAX_OPEN_TRADES:
+                    await self._open_trade(session, sig, symbol)
+                await session.commit()
 
         except Exception as exc:
             logger.error(f"[Worker] process_signal({symbol}) error: {exc}", exc_info=True)
@@ -87,7 +91,7 @@ class WorkerTradeEngine:
     # ── Abrir trade ────────────────────────────────────────────────────────
 
     async def _open_trade(
-        self, session, sig: WorkerSignalResult,
+        self, session, sig: WorkerSignalResult, symbol: str,
     ) -> Optional[int]:
         """Abre novo trade. Retorna ID ou None."""
         can_trade, reason = worker_risk.can_trade(sig.regime)
@@ -104,11 +108,14 @@ class WorkerTradeEngine:
         if risk_per_unit <= 0:
             return None
 
-        quantity = (trade_value * sig.leverage) / risk_per_unit
-        quantity = max(0.001, round(quantity, 6))
+        # FIX: leverage NÃO entra no sizing — já é aplicada no cálculo do PnL.
+        # (Antes: qty × lev e PnL × lev → perda no SL = 1% × lev², até 9% com 3x)
+        # Agora: SL atingido perde exatamente 1% × leverage do saldo.
+        quantity = trade_value / risk_per_unit
+        quantity = max(0.000001, round(quantity, 6))
 
         trade = WorkerTrade(
-            symbol          = "BTCUSDT",  # por enquanto apenas BTC
+            symbol          = symbol,
             timeframe_entry = "15m",
             trade_side      = sig.direction,
             entry_price     = sig.entry_price,
@@ -136,7 +143,7 @@ class WorkerTradeEngine:
         # Registra sinal no signal_tracker
         try:
             await signal_tracker.record_signal(
-                symbol="BTCUSDT", timeframe="15m",
+                symbol=symbol, timeframe="15m",
                 signal=sig.direction,
                 confidence=sig.confidence,
                 indicator=type("obj", (), {"rsi": 50, "close": sig.entry_price})(),
@@ -146,10 +153,29 @@ class WorkerTradeEngine:
             pass
 
         logger.info(
-            f"[Worker] ABERTO {sig.direction} BTCUSDT @ {sig.entry_price:.2f} "
+            f"[Worker] ABERTO {sig.direction} {symbol} @ {sig.entry_price:.2f} "
             f"qty={quantity:.6f} lev={sig.leverage}x SL={sig.stop_loss:.2f} "
             f"TP1={sig.take_profit1:.2f} conf={sig.confidence:.0f}%"
         )
+
+        # Log de atividade + broadcast WebSocket
+        try:
+            from app.services.trade_activity import log_activity
+            await log_activity(
+                agent="worker",
+                event="open",
+                symbol=symbol,
+                price=sig.entry_price,
+                trade_id=trade.id,
+                quantity=quantity,
+                side=sig.direction,
+                confidence=sig.confidence,
+                regime=getattr(sig, "regime", None),
+                balance_after=acc.balance,
+            )
+        except Exception as e:
+            logger.debug(f"[TradeActivity] Falha ao logar abertura worker: {e}")
+
         return trade.id
 
     # ── Gerenciar trade aberto ─────────────────────────────────────────────
@@ -159,6 +185,8 @@ class WorkerTradeEngine:
     ) -> None:
         """Verifica SL/TP/BE/Trailing para um trade aberto."""
         price = sig.entry_price  # preço atual
+        if not price or price <= 0:
+            return  # FIX: sinal sem preço válido fechava trade no SL com preço 0
         side = trade.trade_side
         now = datetime.now(timezone.utc)
 
@@ -217,7 +245,11 @@ class WorkerTradeEngine:
                      (side == "SHORT" and price <= trade.entry_price * 0.995)
             if be_hit:
                 trade.break_even_activated = True
-                trade.stop_loss_price = trade.entry_price
+                # BE cobre taxas (0.16% round-trip) — fechar no BE = net ~0, não -0.16%
+                if side == "LONG":
+                    trade.stop_loss_price = round(trade.entry_price * (1 + WORKER_FEE_TOTAL), 8)
+                else:
+                    trade.stop_loss_price = round(trade.entry_price * (1 - WORKER_FEE_TOTAL), 8)
                 logger.debug(f"[Worker] BE ativado {trade.symbol} @ {price:.2f}")
 
         # ── 5. Trailing Stop ──
@@ -287,6 +319,26 @@ class WorkerTradeEngine:
             f"gross={pnl_pct_rounded:+.3f}% net={net_pnl:+.3f}% "
             f"lev={trade.leverage}x motivo={reason}"
         )
+
+        # Log de atividade + broadcast WebSocket
+        try:
+            from app.services.trade_activity import log_activity
+            await log_activity(
+                agent="worker",
+                event="close",
+                symbol=trade.symbol,
+                price=exit_price,
+                trade_id=trade.id,
+                quantity=trade.quantity,
+                side=side,
+                pnl=round(pnl_net_usd, 6),
+                pnl_pct=net_pnl,  # FIX: net_pnl já está em % (antes multiplicava ×100 de novo)
+                reason=reason,
+                regime=getattr(trade, "regime_at_entry", None),
+                balance_after=acc.balance,
+            )
+        except Exception as e:
+            logger.debug(f"[TradeActivity] Falha ao logar fechamento worker: {e}")
 
     # ── Helpers ────────────────────────────────────────────────────────────
 
