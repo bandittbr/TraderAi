@@ -1,11 +1,15 @@
 """
-Biel — Post Engine
+Biel — Post Engine (v2)
 Orquestra o pipeline completo: contexto → IA → mídia (imagem/reel) → Instagram.
+
+Reels: 2 por dia, categorias sorteadas sem repetição até completar o ciclo de 6.
+Imagens: 1 por dia nos 4 horários fixos (8, 12, 18, 22 UTC).
 """
 
 import os
+import random
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from pathlib import Path
 from sqlalchemy import select, func as sqlfunc
 
@@ -14,7 +18,7 @@ from app.models.biel import BielPost, BielConfig, BielToken
 from app.services.biel.context_builder import build_context
 from app.services.biel.brain import generate_post
 from app.services.biel.visual_generator import generate_image
-from app.services.biel.reel_generator import generate_reel, download_music, REEL_TOPICS
+from app.services.biel.reel_generator import generate_reel, REEL_TOPICS
 from app.services.biel.instagram import publish_media
 from app.services.biel.token_manager import get_active_token
 from app.logger import get_logger
@@ -22,7 +26,7 @@ from app.logger import get_logger
 logger = get_logger(__name__)
 
 TOPICS = ["market", "trade", "insight", "news"]
-REEL_TOPIC_KEYS = list(REEL_TOPICS.keys())
+REEL_TOPIC_KEYS = list(REEL_TOPICS.keys())  # meme, noticias, insight, profits, erros, aprendizados
 
 # URL base pública do backend — auto-detect:
 _railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_STATIC_URL")
@@ -31,15 +35,56 @@ BACKEND_URL = os.environ.get("BACKEND_URL") or (
 )
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  Rotação de Tópicos
+# ═══════════════════════════════════════════════════════════════════
+
 def _get_topic_for_post_number(n: int) -> str:
     """Rotaciona tópicos de imagem: 0→market, 1→trade, 2→insight, 3→news."""
     return TOPICS[n % len(TOPICS)]
 
 
-def _get_reel_topic_for_post_number(n: int) -> str:
-    """Rotaciona tópicos de reel: 0→insight, 1→noticias, 2→profits, 3→erros, etc."""
-    return REEL_TOPIC_KEYS[n % len(REEL_TOPIC_KEYS)]
+async def _pick_reel_topic() -> str:
+    """
+    Escolhe um tópico de reel para hoje, sem repetição até completar o ciclo.
+    
+    Lógica:
+    1. Busca os reels já postados HOJE no banco
+    2. Remove os tópicos já usados hoje da lista de opções
+    3. Sorteia um dos restantes
+    4. Se todos já foram usados hoje, reseta e sorteia de novo
+    
+    Retorna o tópico escolhido.
+    """
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(BielPost.reel_topic).where(
+                BielPost.post_type == "reel",
+                BielPost.status.in_(("pending", "published")),
+                BielPost.created_at >= today_start,
+                BielPost.reel_topic.isnot(None),
+            )
+        )
+        used_today = [row[0] for row in result.all() if row[0]]
+
+    # Tópicos disponíveis = todos menos os já usados hoje
+    available = [t for t in REEL_TOPIC_KEYS if t not in used_today]
+
+    if not available:
+        # Todos já usados — resetar ciclo
+        logger.info("[biel/engine] Todos os tópicos de reel já foram usados hoje. Resetando ciclo.")
+        available = REEL_TOPIC_KEYS.copy()
+
+    chosen = random.choice(available)
+    logger.info(f"[biel/engine] Tópico de reel escolhido: {chosen} (já usados hoje: {used_today})")
+    return chosen
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Config & Post
+# ═══════════════════════════════════════════════════════════════════
 
 async def _get_config() -> BielConfig | None:
     async with AsyncSessionLocal() as session:
@@ -109,13 +154,13 @@ async def _run_post_impl(
 
     # Determinar tópico
     if not topic:
-        async with AsyncSessionLocal() as session:
-            count_result = await session.execute(select(sqlfunc.count(BielPost.id)))
-            total = count_result.scalar() or 0
-
         if post_type == "reel":
-            topic = _get_reel_topic_for_post_number(total)
+            # Rotação inteligente: sem repetição até completar ciclo
+            topic = await _pick_reel_topic()
         else:
+            async with AsyncSessionLocal() as session:
+                count_result = await session.execute(select(sqlfunc.count(BielPost.id)))
+                total = count_result.scalar() or 0
             topic = _get_topic_for_post_number(total)
 
     logger.info(f"[biel/engine] Iniciando post — tipo: {post_type}, tópico: {topic}")
@@ -142,35 +187,26 @@ async def _run_post_impl(
         # 2. Gerar texto + dados visuais estruturados
         brain_result = await generate_post(context, topic, config.gemini_api_key)
         caption = brain_result["caption"]
-        # Mesclar dados visuais no contexto (para insight/news)
-        if "visual" in brain_result and brain_result["visual"]:
-            enriched = brain_result["visual"]
-            context.update(enriched)
-            logger.info(f"[biel/engine] Dados visuais mesclados: {list(enriched.keys())}")
-        logger.info(f"[biel/engine] Caption gerada ({len(caption)} chars)")
 
         if post_type == "reel":
-            # ── Pipeline REEL ───────────────────────────────────
-            # 3a. Gerar imagem base para o reel
-            image_path = await generate_image(context, topic)
-            logger.info(f"[biel/engine] Imagem base gerada: {image_path}")
+            # ── Pipeline REEL (v2) ──────────────────────────────
+            # brain_result["reel"] contém dados estruturados para o template
+            reel_data = brain_result.get("reel", {})
+            logger.info(f"[biel/engine] Dados do reel: {list(reel_data.keys())}")
 
-            # 4a. Baixar música (se não tiver)
-            music_path = await download_music(config.music_url if config.music_url else None)
-
-            # 5a. Gerar vídeo reel
+            # 3a. Gerar vídeo reel: 3 cenas + Ken Burns + narração TTS (edge-tts,
+            # grátis) + legenda sincronizada queimada + música local opcional.
+            # Duração calculada automaticamente pelo tamanho da narração.
             video_path = await generate_reel(
-                image_path=image_path,
-                caption=caption,
                 topic=topic,
-                music_path=music_path,
-                duration=15,  # 15s de reel
+                reel_data=reel_data,
+                context=context,
             )
             filename = Path(video_path).name
             media_url = f"{BACKEND_URL}/biel/reels/{filename}"
             logger.info(f"[biel/engine] Reel URL: {media_url}")
 
-            # 6a. Publicar no Instagram como VIDEO
+            # 5a. Publicar no Instagram como VIDEO
             instagram_id = await publish_media(
                 media_url=media_url,
                 caption=caption,
@@ -181,6 +217,12 @@ async def _run_post_impl(
 
         else:
             # ── Pipeline IMAGE ───────────────────────────────────
+            # Mesclar dados visuais no contexto (para insight/news)
+            if "visual" in brain_result and brain_result["visual"]:
+                enriched = brain_result["visual"]
+                context.update(enriched)
+                logger.info(f"[biel/engine] Dados visuais mesclados: {list(enriched.keys())}")
+
             # 3b. Gerar imagem
             image_path = await generate_image(context, topic)
             filename = Path(image_path).name
@@ -196,12 +238,12 @@ async def _run_post_impl(
                 media_type="IMAGE",
             )
 
-        # 5. Atualizar registro como publicado
+        # 6. Atualizar registro como publicado
         now = datetime.now(timezone.utc)
         async with AsyncSessionLocal() as session:
             db_post = await session.get(BielPost, post_id_db)
             db_post.caption        = caption
-            db_post.image_path     = image_path if post_type == "image" else image_path
+            db_post.image_path     = image_path if post_type == "image" else None
             db_post.video_path     = video_path if post_type == "reel" else None
             db_post.instagram_id   = instagram_id
             db_post.status         = "published"
