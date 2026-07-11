@@ -110,6 +110,11 @@ def _fill_template(html: str, data: dict) -> str:
                     html = html.replace(f"{{{{TIP_{i+1}_DESC}}}}", tip.get("desc", ""))
         else:
             html = html.replace(placeholder, str(value) if value is not None else "—")
+
+    # Blinda contra placeholder que sobrou sem dado (evita mostrar "{{X}}"
+    # cru na tela — acontece pras cenas que não usam certos campos).
+    import re
+    html = re.sub(r"\{\{[A-Z0-9_]+\}\}", "", html)
     return html
 
 
@@ -128,6 +133,15 @@ def render_scene_image(topic: str, scene_data: dict, scene_name: str) -> str:
     template_file = TOPIC_TEMPLATE_MAP.get(topic, "reel_insight.html")
     html = _load_template(template_file)
     html = _fill_template(html, scene_data)
+
+    # Cada template reel_*.html é um card único com 3 blocos marcados
+    # data-scene="hook|content|cta". Escondemos os outros dois blocos pra
+    # cada screenshot virar uma cena isolada em vez de mostrar o card
+    # inteiro (com pedaços vazios) em toda cena.
+    other_scenes = [s for s in ("hook", "content", "cta") if s != scene_name]
+    hide_css = "".join(f'[data-scene="{s}"]{{display:none !important;}}' for s in other_scenes)
+    if hide_css and "</head>" in html:
+        html = html.replace("</head>", f"<style>{hide_css}</style></head>")
 
     filename = f"reel_{topic}_{scene_name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.png"
     output_path = str(IMAGES_DIR / filename)
