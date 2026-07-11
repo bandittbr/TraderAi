@@ -389,6 +389,7 @@ def _build_scene_video(image_path: str, duration: float, zoom_start: float,
 
     cmd = [
         "ffmpeg", "-y",
+        "-filter_threads", "2",
         "-loop", "1",
         "-i", image_path,
         "-vf",
@@ -493,7 +494,7 @@ def _compose_final_video(
 
     all_filters = ";".join(video_filters) + ";" + ";".join(audio_filters)
 
-    cmd = ["ffmpeg", "-y"]
+    cmd = ["ffmpeg", "-y", "-filter_complex_threads", "2", "-filter_threads", "2"]
     for sv in scene_videos:
         cmd.extend(["-i", sv])
     for a in audio_inputs:
