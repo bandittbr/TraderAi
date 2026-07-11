@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px; height: 1920px;
+    font-family: 'Inter', 'Arial Black', sans-serif;
+    background: #0a0d08;
+    color: #fff;
+    overflow: hidden;
+    position: relative;
+  }
+  .bg-gradient {
+    position: absolute; inset: 0;
+    background: linear-gradient(160deg, #0a1a08 0%, #0d0d0d 40%, #081a0a 100%);
+  }
+  .bg-money {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 50% 30%, rgba(0,255,100,0.1) 0%, transparent 50%),
+      radial-gradient(circle at 20% 80%, rgba(0,200,80,0.06) 0%, transparent 40%),
+      radial-gradient(circle at 80% 60%, rgba(0,255,100,0.04) 0%, transparent 40%);
+  }
+  /* Floating money symbols */
+  .float-sym {
+    position: absolute;
+    font-size: 60px;
+    opacity: 0.1;
+    color: #00FF88;
+  }
+  .float-sym.s1 { top: 8%; left: 8%; transform: rotate(-10deg); }
+  .float-sym.s2 { top: 20%; right: 6%; transform: rotate(15deg); font-size: 45px; }
+  .float-sym.s3 { bottom: 25%; left: 5%; transform: rotate(8deg); font-size: 55px; }
+  .float-sym.s4 { bottom: 12%; right: 10%; transform: rotate(-20deg); font-size: 40px; }
+
+  .content {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column;
+    height: 100%; padding: 80px 60px;
+  }
+
+  /* Header */
+  .header {
+    flex: 0 0 auto;
+    text-align: center;
+    margin-top: 120px;
+  }
+  .header-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #00FF88, #00CC44);
+    color: #000;
+    font-size: 28px; font-weight: 900;
+    padding: 14px 40px;
+    border-radius: 50px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 30px;
+  }
+  .profit-emoji {
+    font-size: 100px;
+    display: block;
+    margin-bottom: 20px;
+  }
+
+  /* P&L Display */
+  .pnl-section {
+    flex: 0 0 auto;
+    text-align: center;
+    margin-top: 40px;
+  }
+  .pnl-label {
+    font-size: 28px; font-weight: 400;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .pnl-value {
+    font-size: 96px; font-weight: 900;
+    color: #00FF88;
+    text-shadow: 0 0 40px rgba(0,255,136,0.3);
+    line-height: 1;
+  }
+  .pnl-pct {
+    font-size: 48px; font-weight: 900;
+    color: #00FF88;
+    margin-top: 12px;
+  }
+
+  /* Stats grid */
+  .stats {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 20px;
+    padding: 40px 0;
+  }
+  .stat-row {
+    display: flex;
+    gap: 20px;
+  }
+  .stat-card {
+    flex: 1;
+    background: rgba(0,255,136,0.06);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+  }
+  .stat-label {
+    font-size: 22px; font-weight: 400;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+  .stat-value {
+    font-size: 40px; font-weight: 900;
+    color: #00FF88;
+  }
+  .stat-value.loss { color: #FF4444; }
+
+  /* Trade list */
+  .trades-section {
+    flex: 0 0 auto;
+    margin-top: 20px;
+  }
+  .trades-title {
+    font-size: 24px; font-weight: 700;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .trade-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+  .trade-symbol {
+    font-size: 28px; font-weight: 700;
+    color: #fff;
+  }
+  .trade-pnl {
+    font-size: 28px; font-weight: 900;
+  }
+  .trade-pnl.win { color: #00FF88; }
+  .trade-pnl.loss { color: #FF4444; }
+
+  /* CTA */
+  .cta-section {
+    flex: 0 0 auto;
+    text-align: center;
+    padding-bottom: 100px;
+  }
+  .cta-text {
+    font-size: 36px; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+  }
+  .watermark {
+    font-size: 24px; font-weight: 400;
+    color: rgba(0,255,136,0.5);
+    margin-top: 20px;
+    letter-spacing: 3px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="bg-money"></div>
+
+  <div class="float-sym s1">$</div>
+  <div class="float-sym s2">💰</div>
+  <div class="float-sym s3">$</div>
+  <div class="float-sym s4">📈</div>
+
+  <div class="content">
+    <div class="header" data-scene="hook">
+      <span class="profit-emoji">💰</span>
+      <div class="header-badge">PROFITS</div>
+    </div>
+
+    <div class="pnl-section" data-scene="hook">
+      <div class="pnl-label">P&L Total</div>
+      <div class="pnl-value">{{PNL_VALUE}}</div>
+      <div class="pnl-pct">{{PNL_PCT}}</div>
+    </div>
+
+    <div class="stats" data-scene="content">
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Win Rate</div>
+          <div class="stat-value">{{WIN_RATE}}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Saldo</div>
+          <div class="stat-value">{{SALDO}}</div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Trades Hoje</div>
+          <div class="stat-value">{{TRADES_TODAY}}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Melhor Trade</div>
+          <div class="stat-value">{{BEST_TRADE}}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="trades-section" data-scene="content">
+      <div class="trades-title">Últimos Resultados</div>
+      {{TRADES_LIST}}
+    </div>
+
+    <div class="cta-section" data-scene="cta">
+      <div class="cta-text">{{CTA}}</div>
+      <div class="watermark">BIEL • TRADEAI</div>
+    </div>
+  </div>
+</body>
+</html>

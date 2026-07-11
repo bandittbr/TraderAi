@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px; height: 1920px;
+    font-family: 'Inter', 'Arial Black', sans-serif;
+    background: #0a0a0a;
+    color: #fff;
+    overflow: hidden;
+    position: relative;
+  }
+  /* Animated gradient background */
+  .bg-gradient {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, #1a0533 0%, #0d0d0d 40%, #1a1200 100%);
+  }
+  .bg-pattern {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255,215,0,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(255,68,68,0.06) 0%, transparent 50%);
+  }
+  /* Floating emoji decorations */
+  .float-emoji {
+    position: absolute;
+    font-size: 80px;
+    opacity: 0.15;
+    filter: blur(1px);
+  }
+  .float-emoji.e1 { top: 5%; left: 5%; transform: rotate(-15deg); }
+  .float-emoji.e2 { top: 15%; right: 8%; transform: rotate(20deg); font-size: 60px; }
+  .float-emoji.e3 { bottom: 20%; left: 10%; transform: rotate(10deg); font-size: 70px; }
+  .float-emoji.e4 { bottom: 10%; right: 5%; transform: rotate(-25deg); font-size: 50px; }
+
+  /* Content container */
+  .content {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column;
+    height: 100%; padding: 80px 60px;
+  }
+
+  /* Hook section */
+  .hook-section {
+    flex: 0 0 auto;
+    text-align: center;
+    margin-top: 120px;
+  }
+  .hook-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #FFD700, #FF8C00);
+    color: #000;
+    font-size: 28px; font-weight: 900;
+    padding: 12px 36px;
+    border-radius: 50px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+  }
+  .hook-text {
+    font-size: 72px; font-weight: 900;
+    line-height: 1.1;
+    text-transform: uppercase;
+    background: linear-gradient(180deg, #FFD700 0%, #FF8C00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 20px;
+  }
+  .hook-sub {
+    font-size: 32px; font-weight: 400;
+    color: rgba(255,255,255,0.7);
+    letter-spacing: 1px;
+  }
+
+  /* Main content */
+  .main-content {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 0 20px;
+  }
+  .meme-text {
+    font-size: 52px; font-weight: 900;
+    line-height: 1.2;
+    color: #fff;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+    max-width: 900px;
+  }
+  .meme-text .highlight {
+    color: #FFD700;
+    font-size: 64px;
+  }
+
+  /* Divider */
+  .divider {
+    width: 200px; height: 4px;
+    background: linear-gradient(90deg, transparent, #FFD700, transparent);
+    margin: 40px auto;
+  }
+
+  /* CTA */
+  .cta-section {
+    flex: 0 0 auto;
+    text-align: center;
+    padding-bottom: 100px;
+  }
+  .cta-text {
+    font-size: 36px; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    letter-spacing: 2px;
+  }
+  .watermark {
+    font-size: 24px; font-weight: 400;
+    color: rgba(255,215,0,0.5);
+    margin-top: 20px;
+    letter-spacing: 3px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="bg-pattern"></div>
+
+  <div class="float-emoji e1">😂</div>
+  <div class="float-emoji e2">📈</div>
+  <div class="float-emoji e3">💰</div>
+  <div class="float-emoji e4">🔥</div>
+
+  <div class="content">
+    <div class="hook-section" data-scene="hook">
+      <div class="hook-badge">😂 MEME DO DIA</div>
+      <div class="hook-text">{{HOOK}}</div>
+      <div class="hook-sub">{{HOOK_SUB}}</div>
+    </div>
+
+    <div class="main-content" data-scene="content">
+      <div class="meme-text">{{CONTENT}}</div>
+      <div class="divider"></div>
+      <div class="meme-text" style="font-size:40px; color: rgba(255,255,255,0.6);">{{CONTENT_SUB}}</div>
+    </div>
+
+    <div class="cta-section" data-scene="cta">
+      <div class="cta-text">{{CTA}}</div>
+      <div class="watermark">BIEL • TRADEAI</div>
+    </div>
+  </div>
+</body>
+</html>

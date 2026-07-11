@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px; height: 1920px;
+    font-family: 'Inter', 'Arial Black', sans-serif;
+    background: #0a0d0a;
+    color: #fff;
+    overflow: hidden;
+    position: relative;
+  }
+  .bg-gradient {
+    position: absolute; inset: 0;
+    background: linear-gradient(170deg, #0a1a0d 0%, #0d0d0d 45%, #0d1a0f 100%);
+  }
+  .bg-glow {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(0,255,136,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 70% 80%, rgba(0,200,100,0.06) 0%, transparent 50%);
+  }
+  .content {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column;
+    height: 100%; padding: 80px 60px;
+  }
+
+  /* Header */
+  .header {
+    flex: 0 0 auto;
+    text-align: center;
+    margin-top: 120px;
+  }
+  .header-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #00FF88, #00CC66);
+    color: #000;
+    font-size: 26px; font-weight: 900;
+    padding: 12px 36px;
+    border-radius: 50px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 30px;
+  }
+  .header-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    display: block;
+  }
+
+  /* Question */
+  .question-section {
+    flex: 0 0 auto;
+    text-align: center;
+    margin-top: 30px;
+    padding: 0 20px;
+  }
+  .question {
+    font-size: 48px; font-weight: 900;
+    line-height: 1.2;
+    color: #00FF88;
+    text-transform: uppercase;
+  }
+
+  /* Insights */
+  .insights {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 28px;
+    padding: 40px 0;
+  }
+  .insight-card {
+    background: rgba(0,255,136,0.06);
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 24px;
+    padding: 36px 40px;
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+  }
+  .insight-icon {
+    font-size: 48px;
+    flex: 0 0 auto;
+    margin-top: 4px;
+  }
+  .insight-body {
+    flex: 1 1 auto;
+  }
+  .insight-title {
+    font-size: 32px; font-weight: 900;
+    color: #00FF88;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .insight-desc {
+    font-size: 26px; font-weight: 400;
+    color: rgba(255,255,255,0.7);
+    line-height: 1.4;
+  }
+
+  /* AI Summary */
+  .summary-section {
+    flex: 0 0 auto;
+    text-align: center;
+    padding: 30px 40px;
+    background: rgba(0,255,136,0.04);
+    border-radius: 20px;
+    border: 1px solid rgba(0,255,136,0.1);
+    margin-top: 20px;
+  }
+  .summary-label {
+    font-size: 22px; font-weight: 700;
+    color: rgba(0,255,136,0.6);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .summary-text {
+    font-size: 30px; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    line-height: 1.3;
+  }
+
+  /* CTA */
+  .cta-section {
+    flex: 0 0 auto;
+    text-align: center;
+    padding-bottom: 100px;
+    margin-top: 30px;
+  }
+  .cta-text {
+    font-size: 36px; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+  }
+  .watermark {
+    font-size: 24px; font-weight: 400;
+    color: rgba(0,255,136,0.5);
+    margin-top: 20px;
+    letter-spacing: 3px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="bg-glow"></div>
+
+  <div class="content">
+    <div class="header" data-scene="hook">
+      <span class="header-icon">💡</span>
+      <div class="header-badge">INSIGHT DO DIA</div>
+    </div>
+
+    <div class="question-section" data-scene="hook">
+      <div class="question">{{QUESTION}}</div>
+    </div>
+
+    <div class="insights" data-scene="content">
+      <div class="insight-card">
+        <span class="insight-icon">{{ICON_1}}</span>
+        <div class="insight-body">
+          <div class="insight-title">{{TITLE_1}}</div>
+          <div class="insight-desc">{{DESC_1}}</div>
+        </div>
+      </div>
+      <div class="insight-card">
+        <span class="insight-icon">{{ICON_2}}</span>
+        <div class="insight-body">
+          <div class="insight-title">{{TITLE_2}}</div>
+          <div class="insight-desc">{{DESC_2}}</div>
+        </div>
+      </div>
+      <div class="insight-card">
+        <span class="insight-icon">{{ICON_3}}</span>
+        <div class="insight-body">
+          <div class="insight-title">{{TITLE_3}}</div>
+          <div class="insight-desc">{{DESC_3}}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-section" data-scene="content">
+      <div class="summary-label">Resumo IA</div>
+      <div class="summary-text">{{AI_SUMMARY}}</div>
+    </div>
+
+    <div class="cta-section" data-scene="cta">
+      <div class="cta-text">{{CTA}}</div>
+      <div class="watermark">BIEL • TRADEAI</div>
+    </div>
+  </div>
+</body>
+</html>
