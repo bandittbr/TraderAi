@@ -5,8 +5,9 @@ Esses endpoints são consumidos pelo dashboard do frontend.
 """
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from app.schemas.system import HealthResponse, SystemStatusResponse
 from app.database import check_db_connection
 from app.config import settings
@@ -70,3 +71,84 @@ async def system_status() -> SystemStatusResponse:
         ai_status=None,      # Fase 2
         broker_status=None,  # Fase 2
     )
+
+
+# ── Agent Status ──────────────────────────────────────────────────────────────
+
+class AgentStatusEntry(BaseModel):
+    name:           str
+    status:         str    # "online" | "offline" | "idle"
+    last_execution: str | None = None
+    interval_secs:  int | None = None
+
+class AgentsStatusResponse(BaseModel):
+    agents: list[AgentStatusEntry]
+
+
+@router.get("/agents-status", response_model=AgentsStatusResponse)
+async def get_agents_status():
+    """
+    Retorna status de cada agente (online/offline) baseado na última execução.
+    Online = executou nos últimos 5 minutos.
+    """
+    now = datetime.now(timezone.utc)
+    threshold = timedelta(minutes=5)
+    agents = []
+
+    # ── Worker ──
+    try:
+        from app.services.worker.trade_engine import worker_engine
+        le = worker_engine._last_execution
+        is_online = le is not None and (now - le.replace(tzinfo=timezone.utc)) < threshold
+        agents.append(AgentStatusEntry(
+            name="Worker",
+            status="online" if is_online else "idle",
+            last_execution=le.isoformat() if le else None,
+            interval_secs=60,
+        ))
+    except Exception:
+        agents.append(AgentStatusEntry(name="Worker", status="offline"))
+
+    # ── Scalper ──
+    try:
+        from app.services.scalper.trade_engine import scalper_engine
+        le = scalper_engine._last_execution
+        is_online = le is not None and (now - le.replace(tzinfo=timezone.utc)) < threshold
+        agents.append(AgentStatusEntry(
+            name="Scalper",
+            status="online" if is_online else "idle",
+            last_execution=le.isoformat() if le else None,
+            interval_secs=60,
+        ))
+    except Exception:
+        agents.append(AgentStatusEntry(name="Scalper", status="offline"))
+
+    # ── Paper ──
+    try:
+        from app.services.paper_trading.trade_engine import trade_engine as paper_engine
+        le = paper_engine._last_execution
+        is_online = le is not None and (now - le.replace(tzinfo=timezone.utc)) < threshold
+        agents.append(AgentStatusEntry(
+            name="Paper",
+            status="online" if is_online else "idle",
+            last_execution=le.isoformat() if le else None,
+            interval_secs=60,
+        ))
+    except Exception:
+        agents.append(AgentStatusEntry(name="Paper", status="offline"))
+
+    # ── Groq ──
+    try:
+        from app.services.groq_agent.trade_engine import groq_engine
+        le = groq_engine._last_execution
+        is_online = le is not None and (now - le.replace(tzinfo=timezone.utc)) < threshold
+        agents.append(AgentStatusEntry(
+            name="Groq",
+            status="online" if is_online else "idle",
+            last_execution=le.isoformat() if le else None,
+            interval_secs=60,
+        ))
+    except Exception:
+        agents.append(AgentStatusEntry(name="Groq", status="offline"))
+
+    return AgentsStatusResponse(agents=agents)

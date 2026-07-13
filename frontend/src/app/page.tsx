@@ -7,6 +7,7 @@ import {
   getWorkerAccount,
   getScalperAccount,
   getGroqAccount,
+  getAgentsStatus,
   getFearGreed,
   getMarketStats,
 } from "@/lib/api";
@@ -15,6 +16,7 @@ import type {
   WorkerAccountResponse,
   ScalperAccountResponse,
   GroqAccountResponse,
+  AgentsStatusResponse,
   FearGreedData,
   MarketStatsResponse,
 } from "@/types/index";
@@ -70,6 +72,7 @@ interface AgentBalance {
   color:     string;
   icon:      string;
   href:      string;
+  status?:   string;  // "online" | "offline" | "idle"
   trades?:   number;
   wins?:     number;
   losses?:   number;
@@ -168,6 +171,18 @@ function AgentCard({ agent }: { agent: AgentBalance }) {
   const pnlColor = pnlPositive ? "text-emerald-400" : "text-red-400";
   const hasData = agent.balance !== agent.initial || agent.trades;
 
+  const statusColor = agent.status === "online"
+    ? "bg-emerald-900/30 text-emerald-400"
+    : agent.status === "idle"
+    ? "bg-amber-900/30 text-amber-400"
+    : "bg-[#141c2e] text-[#4a6080]";
+  const statusLabel = agent.status === "online" ? "online" : agent.status === "idle" ? "idle" : "offline";
+  const dotColor = agent.status === "online"
+    ? "bg-emerald-500 shadow-[0_0_6px_#10b981]"
+    : agent.status === "idle"
+    ? "bg-amber-500"
+    : "bg-[#2d4060]";
+
   return (
     <Link href={agent.href} className="block">
       <div className="rounded-xl p-4 transition-all hover:scale-[1.02] hover:border-opacity-60"
@@ -181,11 +196,12 @@ function AgentCard({ agent }: { agent: AgentBalance }) {
             </div>
             <span className="text-xs font-bold text-white">{agent.name}</span>
           </div>
-          {hasData && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400">
-              active
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${statusColor}`}>
+              {statusLabel}
             </span>
-          )}
+          </div>
         </div>
 
         {/* Balance */}
@@ -273,6 +289,7 @@ export default function ControlCenter() {
   const [scalper, setScalper] = useState<ScalperAccountResponse | null>(null);
   const [paper, setPaper]     = useState<PaperStatsResponse | null>(null);
   const [groq, setGroq]       = useState<GroqAccountResponse | null>(null);
+  const [agentsStatus, setAgentsStatus] = useState<AgentsStatusResponse | null>(null);
 
   // Market data
   const [btc, setBtc]             = useState<MarketStatsResponse | null>(null);
@@ -284,6 +301,7 @@ export default function ControlCenter() {
     getWorkerAccount().then(d => setWorker(d)).catch(() => {});
     getScalperAccount().then(d => setScalper(d)).catch(() => {});
     getGroqAccount().then(d => setGroq(d)).catch(() => {});
+    getAgentsStatus().then(d => setAgentsStatus(d)).catch(() => {});
 
     // ── Market data ──
     getMarketStats("BTCUSDT").then(d => setBtc(d)).catch(() => {});
@@ -337,10 +355,20 @@ export default function ControlCenter() {
     };
     checkHealth();
     const id = setInterval(checkHealth, 20_000);
-    return () => clearInterval(id);
+
+    // Refresh agent status every 15s
+    const idAgents = setInterval(() => {
+      getAgentsStatus().then(d => setAgentsStatus(d)).catch(() => {});
+    }, 15_000);
+
+    return () => { clearInterval(id); clearInterval(idAgents); };
   }, []);
 
   // ── Build agent balances ──────────────────────────────────────────────────
+  const agentStatusMap = (agentsStatus?.agents ?? []).reduce(
+    (acc, a) => ({ ...acc, [a.name]: a.status }), {} as Record<string, string>,
+  );
+
   const agents: AgentBalance[] = [
     {
       name: "Worker",
@@ -351,6 +379,7 @@ export default function ControlCenter() {
       color: "#7c3aed",
       icon: "\u2699",
       href: "/worker",
+      status: agentStatusMap["Worker"] ?? "offline",
       trades: worker?.total_trades,
       wins: worker?.winning_trades,
       losses: worker?.losing_trades,
@@ -364,6 +393,7 @@ export default function ControlCenter() {
       color: "#f59e0b",
       icon: "\u26a1",
       href: "/scalper",
+      status: agentStatusMap["Scalper"] ?? "offline",
     },
     {
       name: "Paper",
@@ -374,6 +404,7 @@ export default function ControlCenter() {
       color: "#2563eb",
       icon: "\u25ce",
       href: "/paper-trading",
+      status: agentStatusMap["Paper"] ?? "offline",
       trades: paper?.closed_trades,
       wins: paper ? Math.round(paper.closed_trades * paper.win_rate / 100) : undefined,
       losses: paper ? paper.closed_trades - Math.round(paper.closed_trades * paper.win_rate / 100) : undefined,
@@ -387,6 +418,7 @@ export default function ControlCenter() {
       color: "#8b5cf6",
       icon: "\ud83e\udde0",
       href: "/groq",
+      status: agentStatusMap["Groq"] ?? "offline",
       trades: groq?.total_trades,
       wins: groq?.winning_trades,
       losses: groq?.losing_trades,

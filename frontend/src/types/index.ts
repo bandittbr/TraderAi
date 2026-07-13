@@ -324,6 +324,17 @@ export interface ContextScoreData {
 
 // ── Agent Accounts (Control Center) ────────────────────────────────────────
 
+export interface AgentStatusEntry {
+  name:           string;
+  status:         string;  // "online" | "offline" | "idle"
+  last_execution: string | null;
+  interval_secs:  number | null;
+}
+
+export interface AgentsStatusResponse {
+  agents: AgentStatusEntry[];
+}
+
 export interface WorkerAccountResponse {
   balance:         number;
   initial_balance: number;

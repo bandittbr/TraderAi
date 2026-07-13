@@ -46,6 +46,8 @@ class WorkerTradeEngine:
     Processa sinais, executa trades, gerencia SL/TP/BE/Trailing/TP parcial.
     """
 
+    _last_execution: datetime | None = None
+
     def __init__(self):
         self.signal_engine = WorkerSignalEngine()
 
@@ -65,6 +67,7 @@ class WorkerTradeEngine:
     ) -> None:
         """Processa dados de mercado e decide se abre/fecha trades."""
         try:
+            WorkerTradeEngine._last_execution = datetime.now(timezone.utc)
             # Gera sinal multi-timeframe
             sig = await self.signal_engine.analyze(
                 symbol=symbol, price_1h=price_1h, price_15m=price_15m,
