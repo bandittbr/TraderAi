@@ -15,7 +15,6 @@ import type {
   CandlestickData,
   UTCTimestamp,
   Time,
-  MarkerPosition,
 } from "lightweight-charts";
 import { clsx } from "clsx";
 
@@ -78,7 +77,7 @@ function tradeToMarker(trade: TradeMarker): any {
     // Marker de abertura
     return {
       time: trade.open_time as UTCTimestamp,
-      position: trade.side === "LONG" ? "belowBar" as MarkerPosition : "aboveBar" as MarkerPosition,
+      position: trade.side === "LONG" ? "belowBar" : "aboveBar",
       color: trade.side === "LONG" ? "#10b981" : "#ef4444",
       shape: trade.side === "LONG" ? "arrowUp" as any : "arrowDown" as any,
       text: `${trade.side} @ $${trade.open_price.toLocaleString()}`,
@@ -89,7 +88,7 @@ function tradeToMarker(trade: TradeMarker): any {
   // Marker de fechamento
   return {
     time: (trade.close_time ?? trade.open_time) as UTCTimestamp,
-    position: isWin ? "aboveBar" as MarkerPosition : "belowBar" as MarkerPosition,
+    position: isWin ? "aboveBar" : "belowBar",
     color: isWin ? "#10b981" : "#ef4444",
     shape: "circle" as any,
     text: `${isWin ? "+" : ""}${trade.pnl_pct?.toFixed(2)}%`,
