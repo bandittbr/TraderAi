@@ -39,6 +39,12 @@ const NAV_ITEMS: NavGroup[] = [
     ],
   },
   {
+    group: "CORRETORA",
+    items: [
+      { label: "Binance Real", icon: "broker", href: "/broker", external: false },
+    ],
+  },
+  {
     group: "ANALISE",
     items: [
       { label: "Analytics",       icon: "analy", href: "/analytics",  external: false },
@@ -69,6 +75,7 @@ const ICON_MAP: Record<string, string> = {
   scalp: "⚡︎",   // lightning bolt with text variant (monochrome)
   workr: "⚙",
   groq:  "🧠",
+  broker: "🏦",
   analy: "▲",
   alpha: "◆",
   robus: "◇",

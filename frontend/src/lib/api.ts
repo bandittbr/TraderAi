@@ -20,6 +20,11 @@ import type {
   GroqTradeResponse,
   GroqThinkingResponse,
   GroqDebugResponse,
+  BrokerAccountResponse,
+  BrokerPosition,
+  BrokerOrderResponse,
+  BrokerStatusResponse,
+  BrokerModeConfig,
 } from "@/types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/api/v1";
@@ -256,5 +261,115 @@ export async function getGroqThinking(limit: number = 20): Promise<GroqThinkingR
 
 export async function getGroqDebug(): Promise<GroqDebugResponse | null> {
   try { return await fetchJSON<GroqDebugResponse>("/agents/groq/debug"); }
+  catch { return null; }
+}
+
+// ── Broker (Binance Real) ──────────────────────────────────────────────────
+
+export async function connectBroker(
+  apiKey: string,
+  apiSecret: string,
+  testnet: boolean = true,
+): Promise<{ status: string; message: string; testnet: boolean; balance_usdt: number } | null> {
+  try {
+    return await fetchJSON("/broker/connect", {
+      method: "POST",
+      body: JSON.stringify({ api_key: apiKey, api_secret: apiSecret, testnet }),
+    });
+  } catch { return null; }
+}
+
+export async function disconnectBroker(): Promise<{ status: string; message: string } | null> {
+  try { return await fetchJSON("/broker/disconnect", { method: "POST" }); }
+  catch { return null; }
+}
+
+export async function getBrokerStatus(): Promise<BrokerStatusResponse | null> {
+  try { return await fetchJSON<BrokerStatusResponse>("/broker/status"); }
+  catch { return null; }
+}
+
+export async function setBrokerAutoMode(enabled: boolean): Promise<{ status: string; auto_mode: boolean } | null> {
+  try { return await fetchJSON("/broker/auto-mode", { method: "POST", body: JSON.stringify({ enabled }) }); }
+  catch { return null; }
+}
+
+export async function setBrokerAgent(agent: string): Promise<{ status: string; selected_agent: string } | null> {
+  try { return await fetchJSON("/broker/select-agent", { method: "POST", body: JSON.stringify({ agent }) }); }
+  catch { return null; }
+}
+
+export async function getBrokerBalance(): Promise<{ balances: Array<{ asset: string; free: number; locked: number; total: number }> } | null> {
+  try { return await fetchJSON("/broker/balance"); }
+  catch { return null; }
+}
+
+export async function getBrokerPositions(): Promise<{ positions: BrokerPosition[] } | null> {
+  try { return await fetchJSON("/broker/positions"); }
+  catch { return null; }
+}
+
+export async function placeBrokerOrder(order: {
+  symbol: string;
+  side: string;
+  order_type: string;
+  quantity: number;
+  price?: number;
+  stop_price?: number;
+  position_side?: string;
+  reduce_only?: boolean;
+  client_order_id?: string;
+}): Promise<{ status: string; order: BrokerOrderResponse } | null> {
+  try { return await fetchJSON("/broker/order", { method: "POST", body: JSON.stringify(order) }); }
+  catch { return null; }
+}
+
+export async function cancelBrokerOrder(
+  symbol: string,
+  orderId?: number,
+  clientOrderId?: string,
+): Promise<{ status: string; result: any } | null> {
+  try {
+    const params = new URLSearchParams();
+    if (orderId) params.append("order_id", String(orderId));
+    if (clientOrderId) params.append("client_order_id", clientOrderId);
+    return await fetchJSON(`/broker/order/${symbol}?${params}`, { method: "DELETE" });
+  } catch { return null; }
+}
+
+export async function cancelAllBrokerOrders(symbol: string): Promise<{ status: string; result: any } | null> {
+  try { return await fetchJSON(`/broker/orders/${symbol}`, { method: "DELETE" }); }
+  catch { return null; }
+}
+
+export async function getBrokerOpenOrders(symbol?: string): Promise<{ orders: BrokerOrderResponse[] } | null> {
+  try {
+    const url = symbol ? `/broker/open-orders?symbol=${symbol}` : "/broker/open-orders";
+    return await fetchJSON(url);
+  } catch { return null; }
+}
+
+export async function setBrokerLeverage(symbol: string, leverage: number): Promise<{ status: string; result: any } | null> {
+  try { return await fetchJSON("/broker/leverage", { method: "POST", body: JSON.stringify({ symbol, leverage }) }); }
+  catch { return null; }
+}
+
+export async function setBrokerMarginType(symbol: string, marginType: string): Promise<{ status: string; result: any } | null> {
+  try { return await fetchJSON("/broker/margin-type", { method: "POST", body: JSON.stringify({ symbol, margin_type: marginType }) }); }
+  catch { return null; }
+}
+
+export async function getBrokerTicker(symbol: string): Promise<any | null> {
+  try { return await fetchJSON(`/broker/ticker/${symbol}`); }
+  catch { return null; }
+}
+
+export async function getBrokerPrice(symbol: string): Promise<{ symbol: string; price: number } | null> {
+  try { return await fetchJSON(`/broker/price/${symbol}`); }
+  catch { return null; }
+}
+
+export async function getBrokerKlines(symbol: string, interval: string = "1h", limit: number = 100): Promise<{ symbol: string; interval: string; klines: any[] } | null> {
+  try { return await fetchJSON(`/broker/klines/${symbol}?interval=${interval}&limit=${limit}`); }
   catch { return null; }
 }

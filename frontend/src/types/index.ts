@@ -431,3 +431,117 @@ export interface GroqDebugResponse {
   model:             string;
   frequency:         string;
 }
+
+// ── Broker (Binance Real Trading) ─────────────────────────────────────────────
+
+export type OrderSide = "BUY" | "SELL";
+export type OrderType = "MARKET" | "LIMIT" | "STOP_MARKET" | "TAKE_PROFIT_MARKET";
+export type OrderStatus = "NEW" | "PARTIALLY_FILLED" | "FILLED" | "CANCELED" | "REJECTED" | "EXPIRED";
+export type PositionSide = "LONG" | "SHORT" | "BOTH";
+export type BrokerMode = "AUTO" | "MANUAL";
+
+export interface BrokerCredentials {
+  api_key: string;
+  api_secret: string;
+  testnet: boolean;
+}
+
+export interface BrokerAccountResponse {
+  balances: BrokerBalance[];
+  total_usdt: number;
+  can_trade: boolean;
+  testnet: boolean;
+}
+
+export interface BrokerBalance {
+  asset: string;
+  free: number;
+  locked: number;
+  total: number;
+}
+
+export interface BrokerPosition {
+  symbol: string;
+  position_side: PositionSide;
+  size: number;
+  entry_price: number;
+  mark_price: number;
+  unrealized_pnl: number;
+  leverage: number;
+  isolated: boolean;
+}
+
+export interface BrokerOrderRequest {
+  symbol: string;
+  side: OrderSide;
+  order_type: OrderType;
+  quantity: number;
+  price?: number;
+  stop_price?: number;
+  position_side?: PositionSide;
+  reduce_only?: boolean;
+  client_order_id?: string;
+}
+
+export interface BrokerOrderResponse {
+  order_id: string;
+  client_order_id: string;
+  symbol: string;
+  side: OrderSide;
+  type: OrderType;
+  quantity: number;
+  price: number;
+  status: OrderStatus;
+  filled_qty: number;
+  avg_price: number;
+  commission: number;
+  commission_asset: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BrokerConnectRequest {
+  api_key: string;
+  api_secret: string;
+  testnet: boolean;
+}
+
+export interface BrokerConnectResponse {
+  status: string;
+  message: string;
+  testnet: boolean;
+  balance_usdt: number;
+}
+
+export interface BrokerStatusResponse {
+  connected: boolean;
+  auto_mode: boolean;
+  selected_agent: string;
+  testnet?: boolean;
+  balance_usdt?: number;
+}
+
+export interface BrokerAutoModeRequest {
+  enabled: boolean;
+}
+
+export interface BrokerAgentSelectRequest {
+  agent: string;
+}
+
+export interface BrokerLeverageRequest {
+  symbol: string;
+  leverage: number;
+}
+
+export interface BrokerMarginTypeRequest {
+  symbol: string;
+  margin_type: string;
+}
+
+// ── Broker mode config ─────────────────────────────────────────────────────────
+
+export interface BrokerModeConfig {
+  mode: BrokerMode;
+  selected_agent?: string; // "worker" | "scalper" | "paper" | "groq"
+}

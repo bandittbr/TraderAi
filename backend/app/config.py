@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     paper_stop_loss_percent:  float = 2.0    # % abaixo do entry (hard SL)
     paper_take_profit_percent: float = 4.0   # % acima do entry (TP2 / full close)
 
+    # ── AI / LLM ────────────────────────────────────────────────────────────────
+    gemini_api_key: str = ""
+    groq_api_key: str = ""
+
     # ── Trade Management Engine (Fase 12 / V7) ────────────────────────────────
     paper_max_hours_open:         float = 48.0   # Time Stop: fechar após N horas
     paper_break_even_trigger_pct: float = 1.0    # V7: 1.0% (antes 1.5%) — protege capital mais cedo
