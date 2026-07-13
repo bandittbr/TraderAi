@@ -29,6 +29,8 @@ async def run_phase12_migrations() -> None:
         ("remaining_quantity",    "REAL"),
         ("partial_pnl",           "REAL"),
         ("exit_score_at_close",   "REAL"),
+        ("fee_cost_pct",          "REAL"),
+        ("net_pnl_percent",       "REAL"),
     ]
 
     from app.config import settings
@@ -60,6 +62,47 @@ async def run_phase12_migrations() -> None:
             logger.info(f"[phase12] {added} colunas adicionadas a paper_trades")
         else:
             logger.debug("[phase12] paper_trades já está atualizada")
+
+
+async def run_signal_history_migration() -> None:
+    """
+    Adiciona colunas module_scores_json, threshold_distance, fee_cost_pct, net_pnl_pct à signal_history se não existirem.
+    """
+    from app.config import settings
+
+    new_columns = [
+        ("module_scores_json", "TEXT"),
+        ("threshold_distance", "REAL"),
+        ("fee_cost_pct", "REAL"),
+        ("net_pnl_pct", "REAL"),
+    ]
+
+    async with engine.begin() as conn:
+        if settings.is_postgres:
+            result = await conn.execute(
+                text("SELECT column_name FROM information_schema.columns WHERE table_name = 'signal_history'")
+            )
+            existing = {row[0] for row in result.fetchall()}
+        else:
+            result = await conn.execute(text("PRAGMA table_info(signal_history)"))
+            existing = {row[1] for row in result.fetchall()}
+
+        added = 0
+        for col_name, col_type in new_columns:
+            if col_name not in existing:
+                try:
+                    await conn.execute(
+                        text(f"ALTER TABLE signal_history ADD COLUMN {col_name} {col_type}")
+                    )
+                    added += 1
+                    logger.debug(f"[signal-history] {col_name} adicionada")
+                except Exception as exc:
+                    logger.warning(f"[signal-history] {col_name}: {exc}")
+
+        if added:
+            logger.info(f"[signal-history] {added} colunas adicionadas")
+        else:
+            logger.debug("[signal-history] já está atualizada")
 
 
 async def run_biel_metrics_migration() -> None:

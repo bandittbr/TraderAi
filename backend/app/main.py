@@ -40,6 +40,10 @@ async def lifespan(app: FastAPI):
     from app.database_migrations import run_phase12_migrations
     await run_phase12_migrations()
 
+    # Signal History: adiciona module_scores_json
+    from app.database_migrations import run_signal_history_migration
+    await run_signal_history_migration()
+
     # Biel Engagement Analytics: criar tabelas de métricas
     from app.database_migrations import run_biel_metrics_migration
     await run_biel_metrics_migration()
