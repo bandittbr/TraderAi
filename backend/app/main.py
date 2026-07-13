@@ -40,6 +40,10 @@ async def lifespan(app: FastAPI):
     from app.database_migrations import run_phase12_migrations
     await run_phase12_migrations()
 
+    # Biel Engagement Analytics: criar tabelas de métricas
+    from app.database_migrations import run_biel_metrics_migration
+    await run_biel_metrics_migration()
+
     # Inicia background tasks de dados de mercado (Fase 2)
     # Importação aqui para evitar import circular durante testes unitários
     from app.services.market_data.scheduler import start_background_tasks

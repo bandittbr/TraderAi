@@ -6,6 +6,7 @@ import InfluencerMetrics  from "@/components/influencer/InfluencerMetrics";
 import InfluencerFeed     from "@/components/influencer/InfluencerFeed";
 import InfluencerReelsFeed from "@/components/influencer/InfluencerReelsFeed";
 import InfluencerControls from "@/components/influencer/InfluencerControls";
+import InfluencerEngagement from "@/components/influencer/InfluencerEngagement";
 import BielSetup          from "@/components/biel/BielSetup";
 
 export default function InfluencerPage() {
@@ -13,7 +14,7 @@ export default function InfluencerPage() {
   const [posts, setPosts]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [tab, setTab] = useState<"overview" | "feed" | "reels" | "setup">("overview");
+  const [tab, setTab] = useState<"overview" | "engagement" | "feed" | "reels" | "setup">("overview");
 
   const refresh = useCallback(async () => {
     try {
@@ -38,10 +39,11 @@ export default function InfluencerPage() {
   }, [refresh]);
 
   const tabs = [
-    { key: "overview", label: "📊 Overview" },
-    { key: "feed",     label: "📋 Feed de Posts" },
-    { key: "reels",    label: "🎬 Reels" },
-    { key: "setup",    label: "🔧 Configurar" },
+    { key: "overview",   label: "📊 Overview" },
+    { key: "engagement", label: "⚡ Engajamento" },
+    { key: "feed",       label: "📋 Feed de Posts" },
+    { key: "reels",      label: "🎬 Reels" },
+    { key: "setup",      label: "🔧 Configurar" },
   ] as const;
 
   if (loading) {
@@ -183,6 +185,11 @@ export default function InfluencerPage() {
       {/* Tab: Feed */}
       {tab === "feed" && (
         <InfluencerFeed posts={posts} />
+      )}
+
+      {/* Tab: Engagement */}
+      {tab === "engagement" && (
+        <InfluencerEngagement />
       )}
 
       {/* Tab: Reels */}

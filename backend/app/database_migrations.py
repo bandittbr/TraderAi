@@ -60,3 +60,72 @@ async def run_phase12_migrations() -> None:
             logger.info(f"[phase12] {added} colunas adicionadas a paper_trades")
         else:
             logger.debug("[phase12] paper_trades já está atualizada")
+
+
+async def run_biel_metrics_migration() -> None:
+    """
+    Biel Engagement Analytics — cria tabelas biel_post_metrics e biel_topic_performance
+    se não existirem.
+    """
+    from app.config import settings
+
+    create_tables_sql = {
+        "biel_post_metrics": """
+            CREATE TABLE IF NOT EXISTS biel_post_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL REFERENCES biel_posts(id),
+                instagram_id VARCHAR(100) NOT NULL,
+                like_count INTEGER DEFAULT 0,
+                comments_count INTEGER DEFAULT 0,
+                shares_count INTEGER DEFAULT 0,
+                saves_count INTEGER DEFAULT 0,
+                reach INTEGER DEFAULT 0,
+                impressions INTEGER DEFAULT 0,
+                plays INTEGER DEFAULT 0,
+                profile_visits INTEGER DEFAULT 0,
+                follows INTEGER DEFAULT 0,
+                engagement_score REAL DEFAULT 0.0,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                hours_after_post INTEGER DEFAULT 0,
+                post_published_at TIMESTAMP
+            )
+        """,
+        "biel_topic_performance": """
+            CREATE TABLE IF NOT EXISTS biel_topic_performance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic VARCHAR(50) NOT NULL UNIQUE,
+                post_type VARCHAR(20) NOT NULL,
+                avg_engagement REAL DEFAULT 0.0,
+                avg_reach REAL DEFAULT 0.0,
+                avg_likes REAL DEFAULT 0.0,
+                avg_comments REAL DEFAULT 0.0,
+                avg_saves REAL DEFAULT 0.0,
+                total_posts INTEGER DEFAULT 0,
+                weight REAL DEFAULT 1.0,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """,
+    }
+
+    async with engine.begin() as conn:
+        for table_name, sql in create_tables_sql.items():
+            try:
+                await conn.execute(text(sql))
+                logger.debug(f"[biel-migration] Tabela {table_name} OK")
+            except Exception as exc:
+                logger.warning(f"[biel-migration] {table_name}: {exc}")
+
+        # Índices para performance
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_biemetrics_post_id ON biel_post_metrics(post_id)",
+            "CREATE INDEX IF NOT EXISTS idx_biemetrics_ig_id ON biel_post_metrics(instagram_id)",
+            "CREATE INDEX IF NOT EXISTS idx_biemetrics_fetched ON biel_post_metrics(fetched_at)",
+            "CREATE INDEX IF NOT EXISTS idx_bitoperf_topic ON biel_topic_performance(topic)",
+        ]
+        for idx_sql in indexes:
+            try:
+                await conn.execute(text(idx_sql))
+            except Exception:
+                pass  # índice já existe
+
+    logger.info("[biel-migration] Tabelas de métricas de engajamento criadas/verificadas")

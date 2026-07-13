@@ -46,15 +46,14 @@ def _get_topic_for_post_number(n: int) -> str:
 
 async def _pick_reel_topic() -> str:
     """
-    Escolhe um tópico de reel para hoje, sem repetição até completar o ciclo.
-    
+    Escolhe um tópico de reel com prioridade adaptativa baseada em engajamento.
+
     Lógica:
     1. Busca os reels já postados HOJE no banco
     2. Remove os tópicos já usados hoje da lista de opções
-    3. Sorteia um dos restantes
-    4. Se todos já foram usados hoje, reseta e sorteia de novo
-    
-    Retorna o tópico escolhido.
+    3. Busca pesos adaptativos do engagement_analyzer
+    4. Usa weighted random sampling: tópicos com maior engajamento têm mais chance
+    5. Se todos já foram usados hoje, reseta ciclo mas mantém pesos
     """
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -77,8 +76,38 @@ async def _pick_reel_topic() -> str:
         logger.info("[biel/engine] Todos os tópicos de reel já foram usados hoje. Resetando ciclo.")
         available = REEL_TOPIC_KEYS.copy()
 
-    chosen = random.choice(available)
-    logger.info(f"[biel/engine] Tópico de reel escolhido: {chosen} (já usados hoje: {used_today})")
+    # ── Seleção adaptativa por engajamento ──────────────────────────────
+    from app.services.biel.engagement_analyzer import get_topic_weights
+    weights = await get_topic_weights()
+
+    if weights:
+        # Aplicar pesos: multiplicar pela probabilidade base (uniforme)
+        weighted_pool = []
+        for t in available:
+            w = weights.get(t, 1.0)
+            # Repetir o tópico proporcionalmente ao peso (weighted random)
+            # Usar floor + chance proporcional para o fractional part
+            import random as _rand
+            base_count = max(1, int(w))
+            fractional = w - int(w)
+            if _rand.random() < fractional:
+                base_count += 1
+            weighted_pool.extend([t] * base_count)
+
+        chosen = _rand.choice(weighted_pool)
+        logger.info(
+            f"[biel/engine] Tópico reel escolhido (adaptativo): {chosen} "
+            f"(pesos: {', '.join(f'{k}={v:.2f}' for k, v in weights.items() if k in available)}) "
+            f"(usados hoje: {used_today})"
+        )
+    else:
+        # Sem dados de engajamento ainda — seleção uniforme
+        chosen = random.choice(available)
+        logger.info(
+            f"[biel/engine] Tópico reel escolhido (uniforme): {chosen} "
+            f"(usados hoje: {used_today})"
+        )
+
     return chosen
 
 

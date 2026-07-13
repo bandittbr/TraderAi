@@ -229,7 +229,7 @@ Gere um post para o Instagram seguindo as instruções de personalidade.
             logger.info(f"[biel/brain] JSON de reel extraído para {topic}")
             return result
         logger.warning(f"[biel/brain] Falha ao extrair JSON de reel para {topic}, usando fallback")
-        return _reel_fallback(raw, topic)
+        return _reel_fallback(raw, topic, context)
 
     if topic in ("insight", "news"):
         result = _try_extract_structured(raw, topic)
@@ -342,14 +342,55 @@ def _try_extract_reel(raw: str, topic: str) -> dict | None:
     return None
 
 
-def _reel_fallback(raw: str, topic: str) -> dict:
+def _reel_fallback(raw: str, topic: str, context: dict | None = None) -> dict:
     """
     Fallback quando não consegue extrair JSON de reel.
-    Gera dados básicos a partir do texto cru.
+    Gera dados básicos a partir do texto cru + contexto real do TradeAI.
     """
+    import re as _re
     caption = raw.strip()[:300]
+    ctx = context or {}
 
-    # Dados fallback por topic
+    # ── Helpers para extrair dados reais do contexto ────────────────────
+    def _fmt_pnl(val: float | None) -> str:
+        if val is None:
+            return "—"
+        if val >= 0:
+            return f"+${val:,.2f}"
+        return f"-${abs(val):,.2f}"
+
+    def _fmt_pct(val: float | None) -> str:
+        if val is None:
+            return "—"
+        sign = "+" if val >= 0 else ""
+        return f"{sign}{val:.1f}%"
+
+    def _build_trades_list() -> list[dict]:
+        """Monta trades_list a partir dos últimos trades do contexto."""
+        trades = ctx.get("ultimos_trades", [])
+        result = []
+        for t in trades[:3]:
+            result.append({
+                "symbol": t.get("symbol", "—"),
+                "pnl": _fmt_pnl(t.get("pnl")),
+                "is_win": t.get("resultado") == "WIN",
+            })
+        return result
+
+    def _best_trade() -> str:
+        """Retorna o melhor trade (maior pnl) dos últimos."""
+        trades = ctx.get("ultimos_trades", [])
+        if not trades:
+            return "—"
+        best = max(trades, key=lambda t: t.get("pnl", 0))
+        return _fmt_pnl(best.get("pnl"))
+
+    def _trades_today() -> str:
+        """Conta trades fechados hoje."""
+        trades = ctx.get("ultimos_trades", [])
+        return str(len(trades)) if trades else "0"
+
+    # ── Fallbacks enriquecidos com dados reais ──────────────────────────
     fallbacks = {
         "meme": {
             "hook": "MEME DO DIA",
@@ -376,13 +417,13 @@ def _reel_fallback(raw: str, topic: str) -> dict:
             "cta": "SALVA ESSE POST",
         },
         "profits": {
-            "pnl_value": "—",
-            "pnl_pct": "—",
-            "win_rate": "—",
-            "saldo": "—",
-            "trades_today": "0",
-            "best_trade": "—",
-            "trades_list": [],
+            "pnl_value": _fmt_pnl(ctx.get("pnl_total")),
+            "pnl_pct": _fmt_pct(ctx.get("pnl_pct")),
+            "win_rate": f"{ctx.get('win_rate_recente', 0)}%",
+            "saldo": f"${ctx.get('saldo', 0):,.2f}",
+            "trades_today": _trades_today(),
+            "best_trade": _best_trade(),
+            "trades_list": _build_trades_list(),
             "cta": "SIGA PRA MAIS",
         },
         "erros": {
@@ -406,6 +447,37 @@ def _reel_fallback(raw: str, topic: str) -> dict:
             "cta": "SALVA E COMPARTILHA",
         },
     }
+
+    # Enriquecer erros e aprendizados com dados reais dos trades
+    trades = ctx.get("ultimos_trades", [])
+    losses = [t for t in trades if t.get("resultado") == "LOSS"]
+    wins = [t for t in trades if t.get("resultado") == "WIN"]
+
+    if topic == "erros" and losses:
+        loss = losses[0]
+        fb = fallbacks["erros"]
+        fb["title"] = f"PERDI {_fmt_pnl(abs(loss.get('pnl', 0)))} HOJE"
+        fb["subtitle"] = f"Erro no {loss.get('symbol', 'mercado')}"
+        fb["error_1_title"] = f"ERRO EM {loss.get('symbol', 'ATIVO')}"
+        fb["error_1_desc"] = (
+            f"Trade {loss.get('side', '')} fechou com perda de "
+            f"{_fmt_pnl(loss.get('pnl'))}. "
+            f"Motivo: {loss.get('close_reason', 'não identificado')}."
+        )
+        fb["lesson"] = "Sempre confirme o sinal e gerencie o risco."
+
+    elif topic == "aprendizados" and wins:
+        tip1 = f"WIN DE {_fmt_pnl(wins[0].get('pnl', 0))}" if wins else "DISCIPLINA"
+        fb = fallbacks["aprendizados"]
+        fb["tips"][0]["title"] = tip1
+        fb["tips"][0]["desc"] = (
+            f"{wins[0].get('symbol', 'Ativo')} gerou lucro com "
+            f"entrada disciplinada." if wins
+            else "Mantenha a disciplina em qualquer situação."
+        )
+        fb["takeaway"] = (
+            f"Win rate: {ctx.get('win_rate_recente', 0)}% — consistência paga."
+        )
 
     reel_data = fallbacks.get(topic, fallbacks["insight"])
     return {"caption": caption, "reel": reel_data}
@@ -529,15 +601,30 @@ async def _generate_gemini(api_key: str, prompt: str, max_tokens: int = 400) -> 
 
 
 def _format_context(ctx: dict) -> str:
-    """Formata o contexto em texto legível."""
+    """Formata o contexto em texto legível — inclui TODOS os dados disponíveis."""
     lines = []
 
     if "btc_price" in ctx:
         lines.append(f"- BTC atual: ${ctx['btc_price']:,.2f}")
+    if "btc_change_24h" in ctx:
+        sinal = "+" if ctx["btc_change_24h"] >= 0 else ""
+        lines.append(f"- Variação 24h: {sinal}{ctx['btc_change_24h']:.2f}%")
     if "regime" in ctx:
         lines.append(f"- Regime de mercado: {ctx['regime']} ({ctx.get('regime_symbol', 'BTC')})")
     if "fear_greed_value" in ctx:
-        lines.append(f"- Fear & Greed: {ctx['fear_greed_value']} ({ctx.get('fear_greed_label', '')})")
+        fg_line = f"- Fear & Greed: {ctx['fear_greed_value']} ({ctx.get('fear_greed_label', '')})"
+        if "fear_greed_change_24h" in ctx:
+            fg_sinal = "+" if ctx["fear_greed_change_24h"] >= 0 else ""
+            fg_line += f" | variação 24h: {fg_sinal}{ctx['fear_greed_change_24h']} pts"
+        lines.append(fg_line)
+    if "volume_24h" in ctx:
+        vol = ctx["volume_24h"]
+        vol_str = f"${vol/1e9:.2f}B" if vol >= 1e9 else f"${vol/1e6:.1f}M" if vol >= 1e6 else f"${vol:,.0f}"
+        vol_line = f"- Volume 24h: {vol_str}"
+        if "volume_24h_change_pct" in ctx:
+            vol_sinal = "+" if ctx["volume_24h_change_pct"] >= 0 else ""
+            vol_line += f" | variação: {vol_sinal}{ctx['volume_24h_change_pct']:.1f}%"
+        lines.append(vol_line)
     if "saldo" in ctx:
         pnl = ctx.get("pnl_total", 0)
         pnl_pct = ctx.get("pnl_pct", 0)
@@ -546,6 +633,13 @@ def _format_context(ctx: dict) -> str:
         lines.append(f"- P&L total: {sinal}${pnl:,.2f} ({sinal}{pnl_pct:.1f}%)")
     if "win_rate_recente" in ctx:
         lines.append(f"- Win rate recente: {ctx['win_rate_recente']}% (últimos 5 trades)")
+    if "trade_idea" in ctx:
+        ti = ctx["trade_idea"]
+        lines.append(
+            f"- Trade idea: {ti['symbol']} {ti['side']} @ ${ti['entry']:,.2f} "
+            f"| TP1: ${ti['tp1']:,.2f} | TP2: ${ti['tp2']:,.2f} | SL: ${ti['sl']:,.2f} "
+            f"| R:R 1:{ti['rr']:.1f} | Confiança: {ti['confidence']:.0f}%"
+        )
     if "ultimos_trades" in ctx and ctx["ultimos_trades"]:
         trades_str = ", ".join(
             f"{t['symbol']} {t['side']} {'+' if t['pnl'] >= 0 else ''}{t['pnl']:.2f} ({t['resultado']})"

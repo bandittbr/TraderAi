@@ -1,9 +1,9 @@
 """
 TradeAI - Biel Agent Models
-ORM para o agente Biel: posts, tokens Instagram, configurações.
+ORM para o agente Biel: posts, tokens Instagram, configurações, métricas de engajamento.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -26,6 +26,66 @@ class BielPost(Base):
     reel_topic    = Column(String(50), nullable=True)     # Reels: "meme"|"noticias"|"insight"|"profits"|"erros"|"aprendizados"
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     published_at  = Column(DateTime(timezone=True), nullable=True)
+
+
+class BielPostMetrics(Base):
+    """
+    Métricas de engajamento coletadas do Instagram via Graph API Insights.
+    Cada registro corresponde a um snapshot no tempo de um post publicado.
+    Permite tracking de evolução ao longo do tempo (ex: likes às 24h vs 7d).
+    """
+    __tablename__ = "biel_post_metrics"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    post_id         = Column(Integer, ForeignKey("biel_posts.id"), nullable=False, index=True)
+    instagram_id    = Column(String(100), nullable=False, index=True)
+
+    # Métricas do Instagram Insights API
+    like_count      = Column(Integer, default=0)
+    comments_count  = Column(Integer, default=0)
+    shares_count    = Column(Integer, default=0)
+    saves_count     = Column(Integer, default=0)
+    reach           = Column(Integer, default=0)   # contas únicas que viram
+    impressions     = Column(Integer, default=0)   # total de exibições
+    plays           = Column(Integer, default=0)   # reproduções (reels)
+    profile_visits  = Column(Integer, default=0)   # visitas ao perfil vindas do post
+    follows         = Column(Integer, default=0)   # novos seguidores vindos do post
+
+    # Engagement score pré-calculado (para ordenação rápida)
+    engagement_score = Column(Float, default=0.0)  # fórmula ponderada
+
+    # Controle de coleta
+    fetched_at      = Column(DateTime(timezone=True), server_default=func.now())
+    hours_after_post = Column(Integer, default=0)  # quantas horas depois do post (0 = first fetch)
+
+    # Timestamp do post no Instagram (para referência)
+    post_published_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class BielTopicPerformance(Base):
+    """
+    Performance acumulada por tópico — atualizada a cada ciclo de coleta.
+    Usado pelo _pick_reel_topic() para escolher tópicos com prioridade adaptativa.
+    """
+    __tablename__ = "biel_topic_performance"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    topic           = Column(String(50), nullable=False, unique=True)  # "profits", "meme", etc.
+    post_type       = Column(String(20), nullable=False)  # "image" | "reel"
+
+    # Métricas acumuladas (média ponderada, decay temporal)
+    avg_engagement  = Column(Float, default=0.0)    # score médio de engajamento
+    avg_reach       = Column(Float, default=0.0)    # alcance médio
+    avg_likes       = Column(Float, default=0.0)    # likes médios
+    avg_comments    = Column(Float, default=0.0)    # comments médios
+    avg_saves       = Column(Float, default=0.0)    # saves médios
+    total_posts     = Column(Integer, default=0)    # total de posts com métricas
+
+    # Peso adaptativo (1.0 = neutro, >1.0 = mais frecuente, <1.0 = menos)
+    weight          = Column(Float, default=1.0)
+
+    # Controle
+    last_updated    = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class BielToken(Base):

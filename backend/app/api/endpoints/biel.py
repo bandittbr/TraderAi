@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 IMAGES_DIR = Path("data/biel_images")
+REELS_DIR = Path("data/biel_reels")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -54,6 +55,15 @@ async def serve_image(filename: str):
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Imagem não encontrada")
     return FileResponse(str(filepath), media_type="image/png")
+
+
+@router.get("/reels/{filename}")
+async def serve_reel(filename: str):
+    """Serve vídeos reels gerados para o Instagram."""
+    filepath = REELS_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Reel não encontrado")
+    return FileResponse(str(filepath), media_type="video/mp4")
 
 
 # ── Setup inicial ─────────────────────────────────────────────────────────────
@@ -545,4 +555,111 @@ async def get_metrics():
                 "regime": last_post.regime if last_post else None,
                 "pnl_snapshot": last_post.pnl_snapshot if last_post else None,
             } if last_post else None,
+        }
+
+
+# ── Métricas de Engajamento ─────────────────────────────────────────────────
+
+@router.get("/engagement")
+async def get_engagement():
+    """
+    Retorna métricas de engajamento do Instagram (likes, comments, reach, etc).
+    Inclui: totais, performance por tópico, top posts.
+    """
+    from app.services.biel.engagement_analyzer import get_engagement_summary
+    return await get_engagement_summary()
+
+
+@router.post("/engagement/sync")
+async def sync_engagement():
+    """
+    Força sincronização imediata de métricas do Instagram.
+    Útil para ver dados atualizados sem esperar o ciclo automático (6h).
+    """
+    from app.services.biel.instagram_insights import sync_post_metrics
+    from app.services.biel.engagement_analyzer import update_topic_performance
+
+    synced = await sync_post_metrics(max_posts=30)
+    perf = await update_topic_performance()
+    return {
+        "status": "ok",
+        "posts_synced": synced,
+        "topics_updated": len(perf),
+        "topic_performance": {
+            k: {kk: vv for kk, vv in v.items()}
+            for k, v in perf.items()
+        },
+    }
+
+
+@router.get("/engagement/topics")
+async def get_topic_weights():
+    """
+    Retorna pesos adaptativos dos tópicos (usado pelo frontend e debug).
+    Pesos > 1.0 = tópicos com bom engajamento (aparecem mais frecuentemente).
+    Pesos < 1.0 = tópicos com baixo engajamento (aparecem menos).
+    """
+    from app.services.biel.engagement_analyzer import get_topic_weights
+    weights = await get_topic_weights()
+    return {
+        "weights": weights,
+        "description": {
+            "1.0": "Neutro (baseline)",
+            ">1.0": "Acima da média (mais frequente)",
+            "<1.0": "Abaixo da média (menos frequente)",
+        },
+    }
+
+
+@router.get("/engagement/post/{post_id}")
+async def get_post_engagement(post_id: int):
+    """
+    Retorna métricas de engajamento de um post específico.
+    Inclui histórico de snapshots (primeira medição, 24h, 7d, etc).
+    """
+    from app.models.biel import BielPostMetrics as Metrics
+
+    async with AsyncSessionLocal() as session:
+        # Verificar se o post existe
+        post = await session.get(BielPost, post_id)
+        if not post:
+            raise HTTPException(status_code=404, detail="Post não encontrado")
+
+        # Buscar métricas
+        result = await session.execute(
+            select(Metrics)
+            .where(Metrics.post_id == post_id)
+            .order_by(Metrics.fetched_at)
+        )
+        metrics = result.scalars().all()
+
+        return {
+            "post_id": post_id,
+            "post_type": post.post_type,
+            "topic": post.topic or post.reel_topic,
+            "instagram_id": post.instagram_id,
+            "published_at": post.published_at.isoformat() if post.published_at else None,
+            "metrics_history": [
+                {
+                    "likes": m.like_count,
+                    "comments": m.comments_count,
+                    "shares": m.shares_count,
+                    "saves": m.saves_count,
+                    "reach": m.reach,
+                    "impressions": m.impressions,
+                    "plays": m.plays,
+                    "engagement_score": m.engagement_score,
+                    "hours_after_post": m.hours_after_post,
+                    "fetched_at": m.fetched_at.isoformat() if m.fetched_at else None,
+                }
+                for m in metrics
+            ],
+            "latest": {
+                "likes": metrics[-1].like_count if metrics else 0,
+                "comments": metrics[-1].comments_count if metrics else 0,
+                "shares": metrics[-1].shares_count if metrics else 0,
+                "saves": metrics[-1].saves_count if metrics else 0,
+                "reach": metrics[-1].reach if metrics else 0,
+                "engagement_score": metrics[-1].engagement_score if metrics else 0,
+            } if metrics else None,
         }

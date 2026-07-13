@@ -33,9 +33,11 @@ async def build_context() -> dict:
             if account:
                 ctx["saldo"]          = round(account.balance, 2)
                 ctx["saldo_inicial"]  = round(account.initial_balance, 2)
-                ctx["pnl_total"]      = round(account.total_pnl, 2)
+                # PaperAccount não tem coluna total_pnl — calcular de balance
+                pnl = account.balance - account.initial_balance
+                ctx["pnl_total"]      = round(pnl, 2)
                 ctx["pnl_pct"]        = round(
-                    (account.total_pnl / account.initial_balance) * 100, 2
+                    (pnl / account.initial_balance) * 100, 2
                 ) if account.initial_balance else 0
         except Exception as e:
             logger.warning(f"[biel/context] Conta: {e}")
@@ -56,7 +58,7 @@ async def build_context() -> dict:
                     "entry_price": round(t.entry_price, 2),
                     "exit_price":  round(t.exit_price, 2) if t.exit_price else None,
                     "pnl":        round(t.pnl or 0, 2),
-                    "pnl_pct":    round(t.pnl_pct or 0, 2),
+                    "pnl_pct":    round(t.pnl_percent or 0, 2),
                     "resultado":  "WIN" if (t.pnl or 0) > 0 else "LOSS",
                     "close_reason": t.close_reason or "",
                     "tp1_hit":    bool(t.tp1_hit),
@@ -143,7 +145,7 @@ async def build_context() -> dict:
                 ctx["fear_greed_label"] = fg.classification
 
                 # Ponto mais próximo de 24h atrás (índice é atualizado de hora em hora)
-                cutoff_24h = fg.timestamp - 24 * 3600
+                cutoff_24h = fg.timestamp - timedelta(hours=24)
                 result_prev = await session.execute(
                     select(FearGreedIndex)
                     .where(FearGreedIndex.timestamp <= cutoff_24h)

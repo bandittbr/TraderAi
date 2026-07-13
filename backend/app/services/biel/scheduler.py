@@ -1,6 +1,7 @@
 """
 Biel — Scheduler
 Agenda posts automáticos: imagens nos horários configurados, reels em horários separados.
+Inclui sincronização periódica de métricas de engajamento do Instagram.
 Roda como background task junto com o servidor FastAPI.
 """
 
@@ -54,14 +55,30 @@ async def _already_posted_this_hour(post_type: str, now: datetime) -> bool:
         return (result.scalar() or 0) > 0
 
 
+async def _count_posts_today(post_type: str, now: datetime) -> int:
+    """Conta quantos posts desse tipo já foram publicados hoje."""
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(sqlfunc.count(BielPost.id)).where(
+                BielPost.post_type == post_type,
+                BielPost.status.in_(("pending", "published")),
+                BielPost.created_at >= day_start,
+            )
+        )
+        return result.scalar() or 0
+
+
 async def biel_scheduler_loop():
     """
     Loop principal do Biel — verifica a cada minuto se é hora de postar.
     Posta imagens e reels em horários distintos.
+    A cada 6h: sincroniza métricas de engajamento e atualiza pesos adaptativos.
     """
     logger.info("[biel/scheduler] Iniciado")
     posted_hours: set = set()
     last_token_check_day: int = -1
+    last_metrics_sync_hour: int = -1
 
     while True:
         try:
@@ -72,6 +89,27 @@ async def biel_scheduler_loop():
                 await check_and_renew()
                 last_token_check_day = now.day
                 logger.info("[biel/scheduler] Verificação de token executada")
+
+            # ── Sincronização de métricas (a cada 6h) ───────────────────
+            current_hour_key = now.strftime("%Y-%m-%d-%H")
+            if now.hour % 6 == 0 and now.hour != last_metrics_sync_hour:
+                last_metrics_sync_hour = now.hour
+                try:
+                    from app.services.biel.instagram_insights import sync_post_metrics
+                    from app.services.biel.engagement_analyzer import update_topic_performance
+
+                    synced = await sync_post_metrics(max_posts=20)
+                    if synced > 0:
+                        # After syncing metrics, recalculate topic performance
+                        perf = await update_topic_performance()
+                        logger.info(
+                            f"[biel/scheduler] Métricas sincronizadas: {synced} posts, "
+                            f"{len(perf)} tópicos atualizados"
+                        )
+                    else:
+                        logger.debug("[biel/scheduler] Nenhuma métrica nova para sincronizar")
+                except Exception as e:
+                    logger.error(f"[biel/scheduler] Erro na sincronização de métricas: {e}")
 
             # Reset de horas postadas a cada dia
             day_key = now.strftime("%Y-%m-%d")
@@ -88,7 +126,15 @@ async def biel_scheduler_loop():
                 # Imagem?
                 if hour_key_image not in posted_hours:
                     if await _should_post_now(config, now, "image"):
-                        if await _already_posted_this_hour("image", now):
+                        # Verificar limite diário
+                        max_images = config.posts_per_day or 4
+                        posted_today = await _count_posts_today("image", now)
+                        if posted_today >= max_images:
+                            logger.debug(
+                                f"[biel/scheduler] Limite de imagens atingido "
+                                f"({posted_today}/{max_images})"
+                            )
+                        elif await _already_posted_this_hour("image", now):
                             # Já existe post dessa hora no banco (ex: processo
                             # reiniciou e o set em memória zerou) — só marca,
                             # não posta de novo.
@@ -108,7 +154,15 @@ async def biel_scheduler_loop():
                 # Reel?
                 if hour_key_reel not in posted_hours:
                     if await _should_post_now(config, now, "reel"):
-                        if await _already_posted_this_hour("reel", now):
+                        # Verificar limite diário
+                        max_reels = config.reels_per_day or 2
+                        posted_reels_today = await _count_posts_today("reel", now)
+                        if posted_reels_today >= max_reels:
+                            logger.debug(
+                                f"[biel/scheduler] Limite de reels atingido "
+                                f"({posted_reels_today}/{max_reels})"
+                            )
+                        elif await _already_posted_this_hour("reel", now):
                             posted_hours.add(hour_key_reel)
                         else:
                             logger.info(
