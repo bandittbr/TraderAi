@@ -188,16 +188,19 @@ def fill_market_template(ctx: dict) -> str:
     """
     html = _load_template("market_template.html")
 
-    price = ctx.get("btc_price", 63250.00)
-    change = ctx.get("btc_change_24h", 2.35)
+    price = ctx.get("btc_price")
+    change = ctx.get("btc_change_24h")
 
-    preco_str = f"${price:,.2f}" if price >= 1 else f"${price:.8f}"
-    sinal = "+" if change >= 0 else ""
-    change_str = f"{sinal}{change:.2f}% (24h)"
-
-    change_class = "negative" if change < 0 else ""
-    if change == 0:
+    # Fallback: se não tem dado real, mostra indicador de ausência em vez de preço stale
+    if price is None:
+        preco_str = "DADO INDISPONÍVEL"
+        change_str = "—"
         change_class = ""
+    else:
+        preco_str = f"${price:,.2f}" if price >= 1 else f"${price:.8f}"
+        sinal = "+" if (change or 0) >= 0 else ""
+        change_str = f"{sinal}{(change or 0):.2f}% (24h)"
+        change_class = "negative" if (change or 0) < 0 else ""
 
     # ── Título dinâmico: reflete o regime de mercado real (MarketRegime) ──
     regime = ctx.get("regime", "NEUTRAL").upper()
@@ -310,10 +313,13 @@ def fill_trade_template(ctx: dict) -> str:
 
     symbol = trade.get("symbol", "BTC/USDT")
     side = trade.get("side", "LONG").upper()
-    entry = trade.get("entry", ctx.get("btc_price", 63250.00))
-    tp1 = trade.get("tp1", entry * 1.02)
-    tp2 = trade.get("tp2", entry * 1.04)
-    sl = trade.get("sl", entry * 0.98)
+    entry = trade.get("entry") or ctx.get("btc_price")
+    if entry is None:
+        # Sem dado real — não publica imagem com preço inventado
+        entry = 0
+    tp1 = trade.get("tp1", entry * 1.02) if entry else 0
+    tp2 = trade.get("tp2", entry * 1.04) if entry else 0
+    sl = trade.get("sl", entry * 0.98) if entry else 0
     rr = trade.get("rr", 2.0)
     conviction = int(trade.get("confidence", 70))
     is_open = trade.get("is_open", False)
@@ -361,11 +367,18 @@ def fill_insight_template(ctx: dict) -> str:
     html = _load_template("insight_template.html")
 
     question = ctx.get("question", "O QUE OS DADOS ESTÃO MOSTRANDO?")
-    insights = ctx.get("insights") or [
-        {"icon": "📊", "title": "ACUMULAÇÃO FORTE", "desc": "Grandes players seguem acumulando na tendência atual."},
-        {"icon": "💧", "title": "LIQUIDEZ AUMENTANDO", "desc": "Liquidez crescente nas principais exchanges."},
-        {"icon": "⚡", "title": "TENDÊNCIA DE ALTA", "desc": "Indicadores apontam continuidade do movimento."},
-    ]
+    # Fallback dinâmico: usa dados reais do contexto em vez de texto hardcoded
+    if not ctx.get("insights"):
+        regime = ctx.get("regime", "NEUTRAL").upper()
+        fg = ctx.get("fear_greed_value", 50)
+        vol_chg = ctx.get("volume_24h_change_pct")
+        insights = [
+            {"icon": "📊", "title": f"REGIME: {regime}", "desc": f"Mercado classificado como {regime.lower()} pelo sistema."},
+            {"icon": "😱" if fg < 30 else "😎" if fg > 70 else "⚖️", "title": f"F&G: {fg}", "desc": f"Indicador de medo/ganância em {fg} pontos."},
+            {"icon": "📈" if (vol_chg or 0) > 0 else "📉", "title": "VOLUME", "desc": f"Volume 24h {'cresceu' if (vol_chg or 0) > 0 else 'caiu'} {abs(vol_chg or 0):.1f}%." if vol_chg is not None else "Volume calculado em relação às 24h anteriores."},
+        ]
+    else:
+        insights = ctx["insights"]
     ai_summary = ctx.get("ai_summary", "Informação é poder. Insight é vantagem.")
 
     date_str = datetime.now(timezone.utc).strftime("%d %b %Y").upper()
@@ -418,10 +431,20 @@ def fill_news_template(ctx: dict) -> str:
     """
     html = _load_template("news_template.html")
 
-    headline = ctx.get("headline", "ATUALIZAÇÃO IMPORTANTE NO MERCADO CRIPTO")
-    summary = ctx.get("summary", "Acompanhe os desdobramentos e o impacto no mercado.")
+    headline = ctx.get("headline")
+    summary = ctx.get("summary")
     symbol = ctx.get("news_symbol", "BTC").upper()
     source = ctx.get("source", "TradeAI")
+
+    # Fallback dinâmico: usa notícias reais do contexto em vez de headline hardcoded
+    if not headline:
+        noticias = ctx.get("noticias", [])
+        if noticias:
+            headline = noticias[0].get("titulo", "ATUALIZAÇÃO DO MERCADO CRIPTO")[:80]
+        else:
+            headline = "ATUALIZAÇÃO DO MERCADO CRIPTO"
+    if not summary:
+        summary = "Acompanhe os desdobramentos e o impacto no mercado."
 
     impacts = ctx.get("impacts") or [["IMPACTO", "—"], ["VOLUME", "—"], ["TENDÊNCIA", "—"]]
     # Normaliza formato: aceita [label, valor] ou {label, value}

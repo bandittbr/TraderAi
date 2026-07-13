@@ -26,12 +26,14 @@ const AGENT_LINKS: Record<string, string> = {
   Worker:  "/worker",
   Scalper: "/scalper",
   Paper:   "/paper-trading",
+  Groq:    "/groq",
 };
 
 const AGENT_COLORS: Record<string, string> = {
   Worker:  "#7c3aed",  // purple
   Scalper: "#f59e0b",  // amber
   Paper:   "#2563eb",  // blue
+  Groq:    "#8b5cf6",  // violet
 };
 
 export default function AgentesAI() {

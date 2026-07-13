@@ -16,3 +16,4 @@ matplotlib==3.10.3
 Pillow>=10.0.0
 playwright==1.60.0
 edge-tts>=6.1.0
+groq>=0.20.0

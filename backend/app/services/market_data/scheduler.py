@@ -434,6 +434,7 @@ async def start_background_tasks() -> list:
         asyncio.create_task(alpha_sync_loop(),         name="alpha_sync"),        # Phase 9
         asyncio.create_task(robustness_sync_loop(),   name="robustness_sync"),   # Phase 10
         asyncio.create_task(strategy_sync_loop(),    name="strategy_sync"),     # Phase 11
+        asyncio.create_task(groq_agent_loop(),        name="groq_agent"),       # Groq LLM Agent
     ]
     logger.info(f"Background tasks iniciadas: {[t.get_name() for t in tasks]}")
     return tasks
@@ -555,3 +556,28 @@ async def strategy_sync_loop() -> None:
         except Exception as exc:
             logger.warning("[phase11] strategy_sync_loop: %s", exc)
         await asyncio.sleep(STRATEGY_SYNC_INTERVAL_SECS)
+
+
+# ── Groq Agent Loop ──────────────────────────────────────────────────────────
+
+GROQ_LOOP_INTERVAL_SECS = 60  # A cada 60s (máximo do free tier: 1000 RPD)
+
+
+async def groq_agent_loop() -> None:
+    """Groq Agent: usa LLM para decisões de trading a cada 60s."""
+    import os
+    await asyncio.sleep(30)  # Aguarda dados iniciais
+
+    # Verificar se GROQ_API_KEY está configurada
+    if not os.environ.get("GROQ_API_KEY"):
+        logger.warning("[groq] GROQ_API_KEY não configurada — loop desativado")
+        return
+
+    logger.info("[groq] Iniciando Groq Agent loop (60s)")
+    while True:
+        try:
+            from app.services.groq_agent.trade_engine import groq_engine
+            await groq_engine.process_cycle(symbol="BTCUSDT")
+        except Exception as exc:
+            logger.warning("[groq] Erro no ciclo: %s", exc)
+        await asyncio.sleep(GROQ_LOOP_INTERVAL_SECS)

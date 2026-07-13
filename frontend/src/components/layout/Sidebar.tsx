@@ -35,6 +35,7 @@ const NAV_ITEMS: NavGroup[] = [
       { label: "Paper",    icon: "paper", href: "/paper-trading", external: false },
       { label: "Scalper",  icon: "scalp", href: "/scalper",       external: false },
       { label: "Worker",   icon: "workr", href: "/worker",        external: false },
+      { label: "Groq",     icon: "groq",  href: "/groq",          external: false },
     ],
   },
   {
@@ -67,6 +68,7 @@ const ICON_MAP: Record<string, string> = {
   trade: "◉",
   scalp: "⚡︎",   // lightning bolt with text variant (monochrome)
   workr: "⚙",
+  groq:  "🧠",
   analy: "▲",
   alpha: "◆",
   robus: "◇",

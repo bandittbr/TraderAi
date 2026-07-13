@@ -321,3 +321,81 @@ export interface ContextScoreData {
   context_label:    string;
   news_sentiment:   { positive: number; neutral: number; negative: number; total: number };
 }
+
+// ── Groq Agent ─────────────────────────────────────────────────────────────
+
+export interface GroqAccountResponse {
+  balance:         number;
+  initial_balance: number;
+  peak_balance:    number;
+  total_pnl:       number;
+  total_trades:    number;
+  winning_trades:  number;
+  losing_trades:   number;
+}
+
+export interface GroqStatsResponse {
+  period_days:       number;
+  total_trades:      number;
+  open_trades:       number;
+  win_rate:          number;
+  profit_factor:     number;
+  total_pnl_usd:     number;
+  total_pnl_pct:     number;
+  net_win_rate:      number;
+  net_profit_factor: number;
+  total_net_pnl_pct: number;
+  avg_duration_min:  number;
+  balance:           number;
+  initial_balance:   number;
+  peak_balance:      number;
+  avg_win_pct:       number;
+  avg_loss_pct:      number;
+  max_win_pct:       number;
+  max_loss_pct:      number;
+}
+
+export interface GroqTradeResponse {
+  id:             number;
+  symbol:         string;
+  side:           string;
+  entry_price:    number;
+  exit_price:     number | null;
+  quantity:       number;
+  stop_loss:      number;
+  take_profit:    number;
+  pnl:            number | null;
+  pnl_pct:        number | null;
+  net_pnl_pct:    number | null;
+  status:         string;
+  close_reason:   string | null;
+  confidence:     number | null;
+  regime:         string | null;
+  opened_at:      string;
+  closed_at:      string | null;
+  duration_minutes: number | null;
+}
+
+export interface GroqThinkingResponse {
+  id:             number;
+  symbol:         string;
+  action:         string;
+  confidence:     number | null;
+  reasoning:      string;
+  model:          string;
+  latency_ms:     number | null;
+  prompt_tokens:  number | null;
+  output_tokens:  number | null;
+  error:          string | null;
+  created_at:     string;
+}
+
+export interface GroqDebugResponse {
+  signals_processed: number;
+  last_execution:    string | null;
+  consecutive_losses: number;
+  is_paused:         boolean;
+  sizing_factor:     number;
+  model:             string;
+  frequency:         string;
+}

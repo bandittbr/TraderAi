@@ -46,6 +46,7 @@ const AGENT_COLORS: Record<string, { primary: string; bg: string }> = {
   paper:   { primary: "#2563eb", bg: "rgba(37,99,235,0.15)" },
   scalper: { primary: "#f59e0b", bg: "rgba(245,158,11,0.15)" },
   worker:  { primary: "#7c3aed", bg: "rgba(124,58,237,0.15)" },
+  groq:    { primary: "#8b5cf6", bg: "rgba(139,92,246,0.15)" },
 };
 
 const TF_SECONDS: Record<string, number> = {

@@ -12,6 +12,11 @@ import type {
   SymbolInfo,
   AnalysisSummaryResponse,
   IndicatorData,
+  GroqAccountResponse,
+  GroqStatsResponse,
+  GroqTradeResponse,
+  GroqThinkingResponse,
+  GroqDebugResponse,
 } from "@/types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/api/v1";
@@ -201,4 +206,37 @@ export async function getContextScore(symbol: string): Promise<ContextScoreData 
   try {
     return await fetchJSON<ContextScoreData>(`/context/score?symbol=${symbol}`);
   } catch { return null; }
+}
+
+// ── Groq Agent ─────────────────────────────────────────────────────────────
+
+export async function getGroqAccount(): Promise<GroqAccountResponse | null> {
+  try { return await fetchJSON<GroqAccountResponse>("/agents/groq/account"); }
+  catch { return null; }
+}
+
+export async function getGroqStats(days: number = 30): Promise<GroqStatsResponse | null> {
+  try { return await fetchJSON<GroqStatsResponse>(`/agents/groq/stats?days=${days}`); }
+  catch { return null; }
+}
+
+export async function getGroqTrades(
+  status: string = "ALL",
+  limit: number = 100,
+): Promise<GroqTradeResponse[]> {
+  try {
+    return await fetchJSON<GroqTradeResponse[]>(
+      `/agents/groq/trades?status=${status}&limit=${limit}`,
+    );
+  } catch { return []; }
+}
+
+export async function getGroqThinking(limit: number = 20): Promise<GroqThinkingResponse[]> {
+  try { return await fetchJSON<GroqThinkingResponse[]>(`/agents/groq/thinking?limit=${limit}`); }
+  catch { return []; }
+}
+
+export async function getGroqDebug(): Promise<GroqDebugResponse | null> {
+  try { return await fetchJSON<GroqDebugResponse>("/agents/groq/debug"); }
+  catch { return null; }
 }
