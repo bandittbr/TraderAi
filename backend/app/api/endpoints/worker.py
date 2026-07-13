@@ -19,6 +19,7 @@ from app.services.worker.risk_manager import worker_risk
 # Import agents for leaderboard
 from app.models.scalper import ScalperTrade, ScalperAccount
 from app.models.paper_trading import PaperTrade, PaperAccount
+from app.models.groq_agent import GroqTrade
 
 router = APIRouter()
 
@@ -289,6 +290,38 @@ async def get_agent_leaderboard(days: int = Query(30, ge=1, le=365)):
         except Exception as e:
             agents.append(AgentLeaderboardEntry(
                 name="Paper", status="idle",
+                win_rate=0, profit_factor=0, total_pnl_pct=0, total_trades=0,
+                net_win_rate=0, net_profit_factor=0, total_net_pnl_pct=0,
+            ))
+
+        # ── Groq ──
+        try:
+            gt = await session.execute(
+                select(GroqTrade).where(
+                    GroqTrade.status == "CLOSED",
+                    GroqTrade.closed_at >= cutoff,
+                )
+            )
+            groq_trades = list(gt.scalars().all())
+            g_pnl = lambda t: t.net_pnl_pct if t.net_pnl_pct is not None else t.pnl_pct or 0
+            g_wins = [t for t in groq_trades if g_pnl(t) > 0]
+            g_wr = len(g_wins) / len(groq_trades) * 100 if groq_trades else 0
+            g_gp = sum(g_pnl(t) for t in g_wins)
+            g_gl = abs(sum(g_pnl(t) for t in groq_trades if g_pnl(t) <= 0))
+            g_pf = g_gp / g_gl if g_gl > 0 else 0
+            g_total = sum(g_pnl(t) for t in groq_trades)
+            g_total_gross = sum(t.pnl_pct or 0 for t in groq_trades)
+            agents.append(AgentLeaderboardEntry(
+                name="Groq", status="running",
+                win_rate=round(g_wr, 1), profit_factor=round(g_pf, 3),
+                total_pnl_pct=round(g_total_gross, 2),
+                total_trades=len(groq_trades),
+                net_win_rate=round(g_wr, 1), net_profit_factor=round(g_pf, 3),
+                total_net_pnl_pct=round(g_total, 2),
+            ))
+        except Exception as e:
+            agents.append(AgentLeaderboardEntry(
+                name="Groq", status="idle",
                 win_rate=0, profit_factor=0, total_pnl_pct=0, total_trades=0,
                 net_win_rate=0, net_profit_factor=0, total_net_pnl_pct=0,
             ))
