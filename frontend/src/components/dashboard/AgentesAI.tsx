@@ -40,6 +40,10 @@ export default function AgentesAI() {
   const [data, setData] = useState<Leaderboard | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Hooks SEMPRE no topo - incondicional
+  const { prices } = useWebSocket();
+  const [selectedAgent, setSelectedAgent] = useState<string>("paper");
+
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
@@ -63,9 +67,6 @@ export default function AgentesAI() {
       </div>
     );
   }
-
-  const { prices } = useWebSocket();
-  const [selectedAgent, setSelectedAgent] = useState<string>("paper");
 
   const agents = data?.agents ?? [];
   const best = agents.find((a) => a.best);
