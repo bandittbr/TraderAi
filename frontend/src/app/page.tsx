@@ -2,8 +2,22 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getPaperStats } from "@/lib/api";
-import type { PaperStatsResponse } from "@/types/index";
+import {
+  getPaperStats,
+  getWorkerAccount,
+  getScalperAccount,
+  getGroqAccount,
+  getFearGreed,
+  getMarketStats,
+} from "@/lib/api";
+import type {
+  PaperStatsResponse,
+  WorkerAccountResponse,
+  ScalperAccountResponse,
+  GroqAccountResponse,
+  FearGreedData,
+  MarketStatsResponse,
+} from "@/types/index";
 
 // ── Defensive helpers ─────────────────────────────────────────────────────────
 
@@ -43,6 +57,22 @@ interface HealthStatus {
   database:   SLevel;
   scheduler:  SLevel;
   marketData: SLevel;
+}
+
+// ── Agent balance type ────────────────────────────────────────────────────────
+
+interface AgentBalance {
+  name:      string;
+  balance:   number;
+  initial:   number;
+  pnl:       number;
+  pnlPct:    number;
+  color:     string;
+  icon:      string;
+  href:      string;
+  trades?:   number;
+  wins?:     number;
+  losses?:   number;
 }
 
 // ── Module definitions ────────────────────────────────────────────────────────
@@ -133,6 +163,69 @@ function MetricCard({ label, value, sub, color = "text-white" }: {
   );
 }
 
+function AgentCard({ agent }: { agent: AgentBalance }) {
+  const pnlPositive = agent.pnl >= 0;
+  const pnlColor = pnlPositive ? "text-emerald-400" : "text-red-400";
+  const hasData = agent.balance !== agent.initial || agent.trades;
+
+  return (
+    <Link href={agent.href} className="block">
+      <div className="rounded-xl p-4 transition-all hover:scale-[1.02] hover:border-opacity-60"
+        style={{ background: "#0d1220", border: `1px solid ${agent.color}25` }}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm"
+              style={{ background: `${agent.color}20`, border: `1px solid ${agent.color}40`, color: agent.color }}>
+              {agent.icon}
+            </div>
+            <span className="text-xs font-bold text-white">{agent.name}</span>
+          </div>
+          {hasData && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400">
+              active
+            </span>
+          )}
+        </div>
+
+        {/* Balance */}
+        <div className="mb-2">
+          <span className="text-[9px] text-[#2d4060] uppercase tracking-wider">Saldo</span>
+          <div className="text-base font-bold font-mono text-white">
+            ${agent.balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        {/* PnL */}
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[9px] text-[#2d4060] uppercase tracking-wider">PnL</span>
+            <div className={`text-sm font-bold font-mono ${pnlColor}`}>
+              {pnlPositive ? "+" : ""}{agent.pnlPct.toFixed(2)}%
+            </div>
+          </div>
+          {agent.trades != null && (
+            <div className="text-right">
+              <span className="text-[9px] text-[#2d4060] uppercase tracking-wider">Trades</span>
+              <div className="text-sm font-bold text-white">{agent.trades}</div>
+            </div>
+          )}
+          {agent.wins != null && (
+            <div className="text-right">
+              <span className="text-[9px] text-[#2d4060] uppercase tracking-wider">W/L</span>
+              <div className="text-sm font-bold">
+                <span className="text-emerald-400">{agent.wins}</span>
+                <span className="text-[#2d4060]">/</span>
+                <span className="text-red-400">{agent.losses}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function ModuleCard({ title, description, href, icon, accent, tag, external }: (typeof MODULES)[0]) {
   const inner = (
     <div className="group relative flex flex-col h-full rounded-xl p-5 transition-all"
@@ -175,15 +268,28 @@ export default function ControlCenter() {
   });
   const [signalsToday, setSignalsToday] = useState<number | null>(null);
 
-  useEffect(() => {
-    // ── Paper Trading stats — usa getPaperStats() => GET /api/v1/paper/stats ──
-    getPaperStats()
-      .then(data => {
-        if (data) setStats(data);
-      })
-      .catch(() => {});
+  // Agent accounts
+  const [worker, setWorker]   = useState<WorkerAccountResponse | null>(null);
+  const [scalper, setScalper] = useState<ScalperAccountResponse | null>(null);
+  const [paper, setPaper]     = useState<PaperStatsResponse | null>(null);
+  const [groq, setGroq]       = useState<GroqAccountResponse | null>(null);
 
-    // ── Regime atual — GET /api/v1/analytics/regime/BTCUSDT ──────────────────
+  // Market data
+  const [btc, setBtc]             = useState<MarketStatsResponse | null>(null);
+  const [fearGreed, setFearGreed] = useState<FearGreedData | null>(null);
+
+  useEffect(() => {
+    // ── Agent accounts ──
+    getPaperStats().then(d => { if (d) { setStats(d); setPaper(d); } }).catch(() => {});
+    getWorkerAccount().then(d => setWorker(d)).catch(() => {});
+    getScalperAccount().then(d => setScalper(d)).catch(() => {});
+    getGroqAccount().then(d => setGroq(d)).catch(() => {});
+
+    // ── Market data ──
+    getMarketStats("BTCUSDT").then(d => setBtc(d)).catch(() => {});
+    getFearGreed().then(d => setFearGreed(d)).catch(() => {});
+
+    // ── Regime ──
     const regimeUrl = "/api/v1/analytics/regime/BTCUSDT?timeframe=1h&history_limit=1";
     fetch(regimeUrl)
       .then(r => r.json())
@@ -193,7 +299,7 @@ export default function ControlCenter() {
       })
       .catch(() => {});
 
-    // ── Sinais de hoje — GET /api/v1/analytics/signals ───────────────────────
+    // ── Sinais de hoje ──
     const today = new Date().toISOString().split("T")[0] ?? "";
     const signalsUrl = "/api/v1/analytics/signals?limit=500";
     fetch(signalsUrl)
@@ -205,7 +311,7 @@ export default function ControlCenter() {
       })
       .catch(() => {});
 
-    // ── System health ─────────────────────────────────────────────────────────
+    // ── System health ──
     const checkHealth = async () => {
       let bk = false, db = false, sc = false, mkt = false;
       try {
@@ -234,29 +340,86 @@ export default function ControlCenter() {
     return () => clearInterval(id);
   }, []);
 
+  // ── Build agent balances ──────────────────────────────────────────────────
+  const agents: AgentBalance[] = [
+    {
+      name: "Worker",
+      balance: worker?.balance ?? 10000,
+      initial: worker?.initial_balance ?? 10000,
+      pnl: worker?.total_pnl ?? 0,
+      pnlPct: worker ? ((worker.balance / worker.initial_balance) - 1) * 100 : 0,
+      color: "#7c3aed",
+      icon: "\u2699",
+      href: "/worker",
+      trades: worker?.total_trades,
+      wins: worker?.winning_trades,
+      losses: worker?.losing_trades,
+    },
+    {
+      name: "Scalper",
+      balance: scalper?.balance ?? 10000,
+      initial: scalper?.initial_balance ?? 10000,
+      pnl: scalper?.total_pnl ?? 0,
+      pnlPct: scalper ? ((scalper.balance / scalper.initial_balance) - 1) * 100 : 0,
+      color: "#f59e0b",
+      icon: "\u26a1",
+      href: "/scalper",
+    },
+    {
+      name: "Paper",
+      balance: paper?.current_balance ?? 10000,
+      initial: 10000,
+      pnl: paper?.total_pnl ?? 0,
+      pnlPct: paper?.total_pnl_pct ?? 0,
+      color: "#2563eb",
+      icon: "\u25ce",
+      href: "/paper-trading",
+      trades: paper?.closed_trades,
+      wins: paper ? Math.round(paper.closed_trades * paper.win_rate / 100) : undefined,
+      losses: paper ? paper.closed_trades - Math.round(paper.closed_trades * paper.win_rate / 100) : undefined,
+    },
+    {
+      name: "Groq",
+      balance: groq?.balance ?? 10000,
+      initial: groq?.initial_balance ?? 10000,
+      pnl: groq?.total_pnl ?? 0,
+      pnlPct: groq ? ((groq.balance / groq.initial_balance) - 1) * 100 : 0,
+      color: "#8b5cf6",
+      icon: "\ud83e\udde0",
+      href: "/groq",
+      trades: groq?.total_trades,
+      wins: groq?.winning_trades,
+      losses: groq?.losing_trades,
+    },
+  ];
+
+  const totalBalance = agents.reduce((s, a) => s + a.balance, 0);
+  const totalInitial = agents.reduce((s, a) => s + a.initial, 0);
+  const totalPnl = totalBalance - totalInitial;
+  const totalPnlPct = totalInitial > 0 ? ((totalBalance / totalInitial) - 1) * 100 : 0;
+
   // ── Safe derived display values ───────────────────────────────────────────
   const hasStats = stats != null;
-  const balanceNum  = safeNumber(stats?.current_balance);
   const openTrades  = hasStats ? String(safeNumber(stats?.open_trades)) : "\u2014";
   const winRateNum  = safeNumber(stats?.win_rate);
   const pfNum       = safeNumber(stats?.profit_factor);
-  const totalPnlNum = safeNumber(stats?.total_pnl);
+  const totalPnlPaper = safeNumber(stats?.total_pnl);
   const closedNum   = safeNumber(stats?.closed_trades);
 
   const balance   = hasStats
-    ? `$${balanceNum.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    ? `$${safeNumber(stats?.current_balance).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     : "\u2014";
   const winRate   = hasStats ? `${winRateNum.toFixed(1)}%` : "\u2014";
   const pf        = hasStats ? (pfNum >= 999 ? "\u221e" : pfNum.toFixed(2)) : "\u2014";
-  const totalPnl  = hasStats
-    ? `${totalPnlNum >= 0 ? "+" : ""}$${Math.abs(totalPnlNum).toFixed(2)}`
+  const totalPnlPaperStr  = hasStats
+    ? `${totalPnlPaper >= 0 ? "+" : ""}$${Math.abs(totalPnlPaper).toFixed(2)}`
     : "\u2014";
   const sigLabel  = signalsToday != null ? String(signalsToday) : "\u2014";
 
   const regimeLabel = safeString(regime?.regime, "\u2014");
   const regimeConf  = safeNumber(regime?.confidence, 0);
 
-  const pnlColor = !hasStats ? "text-white" : totalPnlNum >= 0 ? "text-emerald-400" : "text-red-400";
+  const pnlColor = !hasStats ? "text-white" : totalPnlPaper >= 0 ? "text-emerald-400" : "text-red-400";
   const wrColor  = !hasStats ? "text-white" : winRateNum  >= 50 ? "text-emerald-400" : "text-red-400";
   const pfColor  = !hasStats ? "text-white" : pfNum       >= 1  ? "text-emerald-400" : "text-red-400";
   const regColor =
@@ -265,6 +428,32 @@ export default function ControlCenter() {
     regimeLabel === "HIGH_VOLATILITY" ? "text-amber-400"   : "text-[#8aa4c8]";
 
   const bkLevel = health?.backend ?? "loading";
+
+  // BTC display
+  const btcPrice = btc?.price;
+  const btcChange = btc?.change_24h;
+  const btcPriceStr = btcPrice != null
+    ? `$${btcPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "\u2014";
+  const btcChangeStr = btcChange != null
+    ? `${btcChange >= 0 ? "+" : ""}${btcChange.toFixed(2)}%`
+    : "";
+  const btcChangeColor = btcChange != null
+    ? btcChange >= 0 ? "text-emerald-400" : "text-red-400"
+    : "text-[#4a6080]";
+
+  // Fear & Greed
+  const fgValue = fearGreed?.value;
+  const fgLabel = fearGreed?.classification ?? "\u2014";
+  const fgColor = fgValue != null
+    ? fgValue < 25 ? "text-red-400" :
+      fgValue < 45 ? "text-amber-400" :
+      fgValue < 55 ? "text-[#8aa4c8]" :
+      fgValue < 75 ? "text-emerald-300" : "text-emerald-400"
+    : "text-[#4a6080]";
+
+  // Total portfolio
+  const totalPnlColor = totalPnl >= 0 ? "text-emerald-400" : "text-red-400";
 
   // render
 
@@ -279,37 +468,71 @@ export default function ControlCenter() {
           </div>
           <h1 className="text-2xl font-bold text-white leading-none">Control Center</h1>
           <p className="text-xs text-[#2d4060] mt-1.5">
-            Fase 12.5 · 12 modulos ativos · Determinístico · Sem IA generativa
+            4 agentes ativos · Deterministico · Multi-Strategy
           </p>
         </div>
-        <div
-          className="inline-flex items-center gap-1.5 text-[10px] px-3 py-1 rounded-full"
-          style={{
-            background:  bkLevel === "online" ? "#052e16" : "#2d0a0a",
-            border:      "1px solid",
-            borderColor: bkLevel === "online" ? "#14532d" : "#7f1d1d",
-          }}
-        >
-          <span className={`w-1.5 h-1.5 rounded-full ${bkLevel === "online" ? "bg-emerald-500" : "bg-red-500"}`} />
-          <span className={bkLevel === "online" ? "text-emerald-400" : "text-red-400"}>
-            {bkLevel === "online" ? "Sistema Operacional" : bkLevel === "loading" ? "Verificando..." : "Backend Offline"}
-          </span>
+        <div className="flex items-center gap-3">
+          {/* BTC Price */}
+          {btcPrice != null && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+              style={{ background: "#0d1220", border: "1px solid #141c2e" }}>
+              <span className="text-[10px] text-[#4a6080] font-bold">BTC</span>
+              <span className="text-sm font-bold font-mono text-white">{btcPriceStr}</span>
+              <span className={`text-[10px] font-bold ${btcChangeColor}`}>{btcChangeStr}</span>
+            </div>
+          )}
+          {/* System status */}
+          <div
+            className="inline-flex items-center gap-1.5 text-[10px] px-3 py-1 rounded-full"
+            style={{
+              background:  bkLevel === "online" ? "#052e16" : "#2d0a0a",
+              border:      "1px solid",
+              borderColor: bkLevel === "online" ? "#14532d" : "#7f1d1d",
+            }}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${bkLevel === "online" ? "bg-emerald-500" : "bg-red-500"}`} />
+            <span className={bkLevel === "online" ? "text-emerald-400" : "text-red-400"}>
+              {bkLevel === "online" ? "Sistema Operacional" : bkLevel === "loading" ? "Verificando..." : "Backend Offline"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Quick Metrics */}
+      {/* Portfolio Overview — All Agents */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[9px] text-[#1e3050] uppercase tracking-widest font-semibold">
+            Portfolio — Todos os Agentes
+          </div>
+          <div className="flex items-center gap-4 text-[10px]">
+            <span className="text-[#2d4060]">
+              Total: <span className="font-bold text-white">${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </span>
+            <span className="text-[#2d4060]">
+              PnL: <span className={`font-bold ${totalPnlColor}`}>
+                {totalPnl >= 0 ? "+" : ""}{totalPnlPct.toFixed(2)}%
+              </span>
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {agents.map(a => <AgentCard key={a.name} agent={a} />)}
+        </div>
+      </section>
+
+      {/* Quick Metrics — Market + Paper */}
       <section>
         <div className="text-[9px] text-[#1e3050] uppercase tracking-widest mb-3 font-semibold">
-          Metricas Rapidas — Paper Trading
+          Metricas Rapidas
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <MetricCard label="Saldo Virtual"  value={balance}     sub="Paper Account"                                    color={pnlColor} />
-          <MetricCard label="Trades Abertos" value={openTrades}  sub="Posicoes ativas"                                               />
+          <MetricCard label="Fear & Greed" value={fgValue != null ? String(fgValue) : "\u2014"} sub={fgLabel} color={fgColor} />
+          <MetricCard label="Regime BTC/1h"  value={regimeLabel} sub={regime != null ? `${regimeConf.toFixed(0)}% conf.` : undefined} color={regColor} />
+          <MetricCard label="Sinais Hoje"     value={sigLabel}    sub="BTC / ETH / SOL" />
           <MetricCard label="Win Rate"        value={winRate}     sub={`${closedNum} fechados`}                          color={wrColor}  />
           <MetricCard label="Profit Factor"  value={pf}                                                                 color={pfColor}  />
-          <MetricCard label="PnL Total"       value={totalPnl}                                                          color={pnlColor} />
-          <MetricCard label="Sinais Hoje"     value={sigLabel}    sub="BTC / ETH / SOL"                                               />
-          <MetricCard label="Regime BTC/1h"  value={regimeLabel} sub={regime != null ? `${regimeConf.toFixed(0)}% conf.` : undefined} color={regColor} />
+          <MetricCard label="PnL Paper"       value={totalPnlPaperStr}                                                          color={pnlColor} />
+          <MetricCard label="Trades Abertos" value={openTrades}  sub="Posicoes ativas"                                               />
         </div>
       </section>
 
@@ -333,6 +556,7 @@ export default function ControlCenter() {
                 ["DB",       "SQLite + aiosqlite"],
                 ["Frontend", "Next.js 14 + Tailwind"],
                 ["Dados",    "Binance REST + WS"],
+                ["LLM",      "Groq + Gemini"],
               ] as [string, string][]).map(([k, v]) => (
                 <div key={k} className="flex justify-between text-[10px]">
                   <span className="text-[#2d4060]">{k}</span>
@@ -358,7 +582,7 @@ export default function ControlCenter() {
       {/* Footer */}
       <footer className="pt-4 border-t text-center" style={{ borderColor: "#141c2e" }}>
         <p className="text-[10px] text-[#1e3050] font-mono">
-          TradeAI v12.0.0 · Fase 12.5 UX Layer · Deterministico · Sem IA Generativa · Sem SaaS
+          TradeAI v12.0.0 · 4 Agents · Groq + Gemini · Multi-Strategy · Deterministico
         </p>
       </footer>
 

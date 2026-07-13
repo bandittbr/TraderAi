@@ -322,6 +322,27 @@ export interface ContextScoreData {
   news_sentiment:   { positive: number; neutral: number; negative: number; total: number };
 }
 
+// ── Agent Accounts (Control Center) ────────────────────────────────────────
+
+export interface WorkerAccountResponse {
+  balance:         number;
+  initial_balance: number;
+  peak_balance:    number;
+  total_pnl:       number;
+  total_trades:    number;
+  winning_trades:  number;
+  losing_trades:   number;
+  updated_at:      string | null;
+}
+
+export interface ScalperAccountResponse {
+  balance:         number;
+  initial_balance: number;
+  peak_balance:    number;
+  total_pnl:       number;
+  updated_at:      string | null;
+}
+
 // ── Groq Agent ─────────────────────────────────────────────────────────────
 
 export interface GroqAccountResponse {

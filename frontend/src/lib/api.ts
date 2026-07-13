@@ -12,6 +12,8 @@ import type {
   SymbolInfo,
   AnalysisSummaryResponse,
   IndicatorData,
+  WorkerAccountResponse,
+  ScalperAccountResponse,
   GroqAccountResponse,
   GroqStatsResponse,
   GroqTradeResponse,
@@ -209,6 +211,16 @@ export async function getContextScore(symbol: string): Promise<ContextScoreData 
 }
 
 // ── Groq Agent ─────────────────────────────────────────────────────────────
+
+export async function getWorkerAccount(): Promise<WorkerAccountResponse | null> {
+  try { return await fetchJSON<WorkerAccountResponse>("/worker/account"); }
+  catch { return null; }
+}
+
+export async function getScalperAccount(): Promise<ScalperAccountResponse | null> {
+  try { return await fetchJSON<ScalperAccountResponse>("/scalper/account"); }
+  catch { return null; }
+}
 
 export async function getGroqAccount(): Promise<GroqAccountResponse | null> {
   try { return await fetchJSON<GroqAccountResponse>("/agents/groq/account"); }
