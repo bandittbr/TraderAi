@@ -47,7 +47,7 @@ export default function AgentesAI() {
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const res = await fetch("/api/v1/agents/leaderboard?days=30");
+        const res = await fetch("/api/v1/worker/leaderboard?days=30");
         if (res.ok) setData(await res.json());
       } catch (e) {
         console.error("[AgentesAI] fetch error:", e);

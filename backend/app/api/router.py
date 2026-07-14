@@ -64,9 +64,6 @@ router.include_router(scalper.router, prefix="/scalper", tags=["Scalper"])
 # -- V7: Worker Agent 24/7 --------------------------------------------
 router.include_router(worker.router, prefix="/worker", tags=["Worker"])
 
-# -- V7: Agent Leaderboard (cross-agent) --------------------------------
-router.include_router(worker.router, prefix="/agents", tags=["Agents"])
-
 # -- Fase 14: Biel Instagram Agent ------------------------------------
 router.include_router(biel.router, prefix="/biel", tags=["Biel"])
 

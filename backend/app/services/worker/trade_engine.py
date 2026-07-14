@@ -139,6 +139,19 @@ class WorkerTradeEngine:
         session.add(trade)
         await session.flush()
 
+        # Auto-trading: send signal to broker if enabled
+        try:
+            from app.services.broker.engine import broker_engine
+            await broker_engine.process_agent_signal(
+                "default", "worker",
+                {"symbol": symbol, "side": sig.direction, "confidence": sig.confidence,
+                 "regime": sig.regime, "entry_price": sig.entry_price,
+                 "stop_loss": sig.stop_loss, "take_profit": sig.take_profit1,
+                 "quantity": quantity}
+            )
+        except Exception as auto_err:
+            logger.warning(f"[Worker] Auto-trading signal failed: {auto_err}", exc_info=True)
+
         # Atualiza conta
         acc.total_trades += 1
         acc.updated_at = datetime.now(timezone.utc)
@@ -152,8 +165,8 @@ class WorkerTradeEngine:
                 indicator=type("obj", (), {"rsi": 50, "close": sig.entry_price})(),
                 current_price=sig.entry_price,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[Worker] Falha ao registrar sinal no signal_tracker: {e}", exc_info=True)
 
         logger.info(
             f"[Worker] ABERTO {sig.direction} {symbol} @ {sig.entry_price:.2f} "

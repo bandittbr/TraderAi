@@ -299,16 +299,16 @@ async def _process_signal_for_paper_trading(symbol: str, tf: str, ind) -> None:
         regime_result = classify_regime(ind, price)
         try:
             await _save_regime_to_db(symbol, tf, regime_result)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[scheduler] falha (degradação graciosa): {exc}", exc_info=True)
 
         # Context (Phase 5 -- opcional)
         context = None
         try:
             from app.services.market_context.context_engine import context_engine
             context = await context_engine.get_context(symbol)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[scheduler] falha (degradação graciosa): {exc}", exc_info=True)
 
         # Market Structure V4 (Phase 6.5 — graceful degradation)
         structure = None
@@ -360,8 +360,8 @@ async def _process_signal_for_paper_trading(symbol: str, tf: str, ind) -> None:
                 weighted_score = signal.weighted_score,
                 weights_version= _weights_version,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"[scheduler] falha (degradação graciosa): {exc}", exc_info=True)
 
         # Paper Trading — Phase 12: passa contexto completo ao TradeManager
         await trade_engine.process_signal(SignalInput(

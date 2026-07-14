@@ -129,6 +129,20 @@ class ScalperTradeEngine:
         )
         session.add(trade)
         await session.flush()  # flush para obter o ID do trade
+
+        # Auto-trading: send signal to broker if enabled
+        try:
+            from app.services.broker.engine import broker_engine
+            await broker_engine.process_agent_signal(
+                "default", "scalper",
+                {"symbol": sig.symbol, "side": side, "confidence": sig.confidence,
+                 "regime": sig.trend_15m, "entry_price": price,
+                 "stop_loss": sl_price, "take_profit": tp_price,
+                 "quantity": qty}
+            )
+        except Exception as auto_err:
+            logger.warning(f"[Scalper] Auto-trading signal failed: {auto_err}", exc_info=True)
+
         logger.info(
             f"[Scalper] ABERTO {sig.symbol} {side} @ {price:.4f} "
             f"SL={sl_price:.4f} ({sl_pct*100:.3f}%) TP={tp_price:.4f} ({tp_pct*100:.3f}%) "

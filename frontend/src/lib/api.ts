@@ -28,11 +28,16 @@ import type {
 } from "@/types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/api/v1";
+const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? "";
 
 async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (API_TOKEN) {
+    headers["Authorization"] = `Bearer ${API_TOKEN}`;
+  }
   const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
 

@@ -208,6 +208,19 @@ class GroqTradeEngine:
         session.add(trade)
         await session.flush()
 
+        # Auto-trading: send signal to broker if enabled
+        try:
+            from app.services.broker.engine import broker_engine
+            await broker_engine.process_agent_signal(
+                "default", "groq",
+                {"symbol": symbol, "side": side, "confidence": signal.confidence,
+                 "regime": signal.market_assessment, "entry_price": price,
+                 "stop_loss": sl_price, "take_profit": tp_price,
+                 "quantity": quantity}
+            )
+        except Exception as auto_err:
+            logger.warning(f"[Groq] Auto-trading signal failed: {auto_err}", exc_info=True)
+
         # Atualizar conta
         account.total_trades += 1
         account.updated_at = datetime.now(timezone.utc)

@@ -362,8 +362,8 @@ async def trigger_analytics_compute(req: AnalyticsQueryRequest):
         if req.regime:
             try:
                 regime_enum = MRT(req.regime.upper())
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.warning(f"analytics: regime inválido '{req.regime}': {e}", exc_info=True)
         result = await strategy_analytics.analyze(
             symbol      = req.symbol,
             regime      = regime_enum,

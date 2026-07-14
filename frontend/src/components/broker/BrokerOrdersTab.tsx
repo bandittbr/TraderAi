@@ -2,9 +2,10 @@
 
 import React from "react";
 import { useState } from "react";
+import type { BrokerOrderResponse } from "@/types";
 
 interface BrokerOrdersTabProps {
-  openOrders: any[];
+  openOrders: BrokerOrderResponse[];
   onRefresh: () => Promise<void>;
 }
 
@@ -15,7 +16,7 @@ export default function BrokerOrdersTab({ openOrders, onRefresh }: BrokerOrdersT
     return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   }
 
-  async function handleCancelOrder(order: any) {
+  async function handleCancelOrder(order: BrokerOrderResponse) {
     try {
       await fetch(`/api/v1/broker/order/${order.symbol}`, {
         method: "DELETE",

@@ -11,7 +11,7 @@ const nextConfig = {
   },
   env: {
     NEXT_PUBLIC_APP_NAME: "TradeAI",
-    NEXT_PUBLIC_APP_VERSION: "1.0.0",
+    NEXT_PUBLIC_APP_VERSION: "14.0.0",
   },
 };
 

@@ -6,6 +6,7 @@ ORM para o agente Biel: posts, tokens Instagram, configurações, métricas de e
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base
+from app.security.crypto import EncryptedText
 
 
 class BielPost(Base):
@@ -94,11 +95,11 @@ class BielToken(Base):
 
     id              = Column(Integer, primary_key=True, index=True)
     account_id      = Column(String(100), nullable=False)   # Instagram Account ID
-    access_token    = Column(Text, nullable=False)           # Token atual
+    access_token    = Column(EncryptedText, nullable=False)   # Token atual (encriptado)
     token_type      = Column(String(20), default="long_lived")  # short|long_lived|page
     expires_at      = Column(DateTime(timezone=True), nullable=True)
     app_id          = Column(String(100), nullable=True)
-    app_secret      = Column(String(200), nullable=True)
+    app_secret      = Column(EncryptedText, nullable=True)    # Encriptado
     last_renewed_at = Column(DateTime(timezone=True), nullable=True)
     is_active       = Column(Boolean, default=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
@@ -110,7 +111,7 @@ class BielConfig(Base):
     __tablename__ = "biel_config"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    gemini_api_key      = Column(Text, nullable=False)   # FIXME: criptografar antes de salvar
+    gemini_api_key      = Column(EncryptedText, nullable=False)  # Encriptado via Fernet
     posts_per_day       = Column(Integer, default=4)
     post_hours          = Column(String(50), default="8,12,18,22")  # Horários dos posts
     reels_per_day       = Column(Integer, default=2)       # Quantos reels por dia

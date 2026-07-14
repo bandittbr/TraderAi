@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # ── Aplicação ──────────────────────────────────────────────────────────────
     app_name: str = "TradeAI"
-    app_version: str = "12.5.0"
+    app_version: str = "14.0.0"
     app_env: str = "development"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
@@ -49,6 +49,8 @@ class Settings(BaseSettings):
 
     # ── Segurança (Fase 2) ─────────────────────────────────────────────────────
     secret_key: str = "change-this-secret-key-in-production"
+    api_token: str = ""                 # Bearer token para proteger endpoints críticos (vazio = dev aberto)
+    secret_encryption_key: str = ""     # Fernet key para encriptar dados sensíveis no DB (vazio = plaintext)
 
     # ── Paper Trading (Fase 4) ─────────────────────────────────────────────────
     paper_initial_balance:    float = 200.0

@@ -7,7 +7,7 @@ import type { BrokerPosition, OrderSide, OrderType, PositionSide } from "@/types
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "AVAXUSDT", "LINKUSDT"];
 
 interface BrokerPositionsTabProps {
-  positions: any[];
+  positions: BrokerPosition[];
   onRefresh: () => Promise<void>;
 }
 
@@ -22,7 +22,7 @@ export default function BrokerPositionsTab({ positions, onRefresh }: BrokerPosit
     return pnl >= 0 ? "text-emerald-400" : "text-red-400";
   }
 
-  async function handleClosePosition(pos: any) {
+  async function handleClosePosition(pos: BrokerPosition) {
     setClosingPosition(pos.symbol);
     try {
       const side = pos.position_side === "LONG" ? "SELL" : "BUY";

@@ -172,8 +172,8 @@ def _filter_by_criteria(rows: list, strategy_criteria: list[str], min_conf: int)
                         crit_met.add(sc)
                     elif _criterion_from_fields(sc, r):
                         crit_met.add(sc)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"evaluator[_evaluate_strategy_criteria]: {e}", exc_info=True)
         else:
             for sc in strategy_criteria:
                 if sc in FIELD_MAP and FIELD_MAP[sc](r):

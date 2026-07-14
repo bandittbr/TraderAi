@@ -15,7 +15,7 @@ import {
   setBrokerMarginType,
   getBrokerTicker,
 } from "@/lib/api";
-import type { BrokerStatusResponse, BrokerPosition, BrokerOrderResponse, BrokerConnectResponse, OrderSide, OrderType, PositionSide } from "@/types";
+import type { BrokerStatusResponse, BrokerPosition, BrokerOrderResponse, BrokerBalance, BrokerConnectResponse, OrderSide, OrderType, PositionSide } from "@/types";
 import { BrokerConnectTab } from "@/components/broker/BrokerConnectTab";
 import { BrokerTradeTab } from "@/components/broker/BrokerTradeTab";
 import BrokerPositionsTab from "@/components/broker/BrokerPositionsTab";
@@ -49,9 +49,9 @@ export default function BrokerPage() {
   const [marginType, setMarginType] = useState("ISOLATED");
 
   // Data
-  const [positions, setPositions] = useState<any[]>([]);
-  const [openOrders, setOpenOrders] = useState<any[]>([]);
-  const [balances, setBalances] = useState<any[]>([]);
+  const [positions, setPositions] = useState<BrokerPosition[]>([]);
+  const [openOrders, setOpenOrders] = useState<BrokerOrderResponse[]>([]);
+  const [balances, setBalances] = useState<BrokerBalance[]>([]);
   const [ticker, setTicker] = useState<any>(null);
 
   // Tabs
@@ -99,7 +99,7 @@ export default function BrokerPage() {
       ]);
       if (pos) setPositions(pos.positions);
       if (ord) setOpenOrders(ord.orders);
-      if (bal) setBalances(bal.balances.filter((b: any) => b.total > 0).sort((a: any, b: any) => b.total - a.total));
+      if (bal) setBalances(bal.balances.filter((b) => b.total > 0).sort((a, b) => b.total - a.total));
       if (tk) setTicker(tk);
     } catch (e) {
       console.error("[Broker] loadData error:", e);
@@ -214,7 +214,7 @@ export default function BrokerPage() {
     }
   }
 
-  async function handleCancelOrder(order: any) {
+  async function handleCancelOrder(order: BrokerOrderResponse) {
     try {
       await cancelBrokerOrder(order.symbol, parseInt(order.order_id));
       setSuccess("Ordem cancelada");

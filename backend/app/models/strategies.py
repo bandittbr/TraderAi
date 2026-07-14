@@ -9,6 +9,9 @@ from sqlalchemy import (
     Column, Integer, Float, String, Boolean, Text, DateTime, ForeignKey, Index
 )
 from app.database import Base
+from app.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class StrategyLibrary(Base):
@@ -67,15 +70,21 @@ class StrategyLibrary(Base):
 
     def entry_rules_dict(self) -> dict:
         try: return json.loads(self.entry_rules)
-        except: return {}
+        except Exception as e:
+            logger.warning(f"StrategyLibrary.entry_rules_dict: {e}", exc_info=True)
+            return {}
 
     def exit_rules_dict(self) -> dict:
         try: return json.loads(self.exit_rules)
-        except: return {}
+        except Exception as e:
+            logger.warning(f"StrategyLibrary.exit_rules_dict: {e}", exc_info=True)
+            return {}
 
     def risk_rules_dict(self) -> dict:
         try: return json.loads(self.risk_rules)
-        except: return {}
+        except Exception as e:
+            logger.warning(f"StrategyLibrary.risk_rules_dict: {e}", exc_info=True)
+            return {}
 
 
 class StrategyVersion(Base):

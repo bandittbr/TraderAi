@@ -357,8 +357,8 @@ class StrategyEngine:
                 top    = result.scalar_one_or_none()
                 if top:
                     return (top.name, top.strategy_score)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"strategy_engine[_get_top_strategy]: {e}", exc_info=True)
         return None
 
 

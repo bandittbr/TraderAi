@@ -10,10 +10,10 @@ import {
   setBrokerMarginType,
   getBrokerTicker,
 } from "@/lib/api";
-import type { BrokerPosition, BrokerOrderResponse, BrokerOrderRequest, OrderSide, OrderType, PositionSide } from "@/types";
+import type { BrokerPosition, BrokerOrderResponse, BrokerOrderRequest, BrokerStatusResponse, OrderSide, OrderType, PositionSide } from "@/types";
 
 interface BrokerTradeTabProps {
-  status: any;
+  status: BrokerStatusResponse | null;
   positions: BrokerPosition[];
   openOrders: BrokerOrderResponse[];
   ticker: any;

@@ -8,8 +8,9 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from pydantic import BaseModel, Field
 from typing import Optional
 from app.services.broker.engine import broker_engine, BinanceCredentials, OrderSide, OrderType, PositionSide
+from app.security.auth import require_token
 
-router = APIRouter(prefix="/broker", tags=["Corretora"])
+router = APIRouter(prefix="/broker", tags=["Corretora"], dependencies=[Depends(require_token)])
 
 
 # ── Models ────────────────────────────────────────────────────────────────

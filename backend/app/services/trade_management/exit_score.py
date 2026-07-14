@@ -17,6 +17,9 @@ from __future__ import annotations
 
 from typing import Optional, Any
 from app.config import settings
+from app.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def compute_exit_score(
@@ -51,8 +54,8 @@ def compute_exit_score(
             if side == "SHORT":
                 ctx_delta = -ctx_delta  # inverter para SHORT
             score += ctx_delta
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"exit_score: {e}", exc_info=True)
 
     # ── Regime (25%) ─────────────────────────────────────────────────────────
     if regime is not None:
@@ -66,8 +69,8 @@ def compute_exit_score(
             }
             delta = regime_map.get(side, {}).get(regime_val.upper(), 0)
             score += delta
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"exit_score: {e}", exc_info=True)
 
     # ── Market Structure (25%) ────────────────────────────────────────────────
     if structure is not None:
@@ -92,8 +95,8 @@ def compute_exit_score(
                 score -= 10
             if side == "SHORT" and getattr(structure, "bos_bullish", False):
                 score -= 10
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"exit_score: {e}", exc_info=True)
 
     # ── SMC / Liquidity (15%) ─────────────────────────────────────────────────
     if smc is not None:
@@ -109,8 +112,8 @@ def compute_exit_score(
                 score -= 8
             elif side == "SHORT" and sweep_bias == "BULLISH":
                 score -= 8
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"exit_score: {e}", exc_info=True)
 
     # ── Momentum: P&L atual (10%) ─────────────────────────────────────────────
     if entry_price and entry_price > 0:
@@ -122,8 +125,8 @@ def compute_exit_score(
             # ±10 pontos para ±10% P&L
             momentum_delta = max(-10, min(10, pnl_pct * 1.0))
             score += momentum_delta
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"exit_score: {e}", exc_info=True)
 
     return round(max(0.0, min(100.0, score)), 2)
 

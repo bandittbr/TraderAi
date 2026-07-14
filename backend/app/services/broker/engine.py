@@ -8,6 +8,7 @@ import hmac
 import hashlib
 import time
 import json
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Optional
 from dataclasses import dataclass
@@ -397,21 +398,138 @@ class BrokerEngine:
 
     async def execute_signal_auto(self, user_id: str, signal: dict) -> dict | None:
         """
-        Executa sinal automaticamente baseado no agente selecionado.
-        signal = {symbol, side, confidence, regime, agent_suggestion, ...}
+        Executa sinal automaticamente via Binance Futures.
+
+        signal dict expected keys:
+            symbol:     str   e.g. "BTCUSDT"
+            side:       str   "LONG" or "SHORT"
+            confidence: float 0-100
+            regime:     str   e.g. "trend", "range"
+            agent_suggestion: str  e.g. "worker", "groq", "scalper"
+        Additional optional: entry_price, stop_loss, take_profit, quantity
+
+        Returns dict with order result or skip/error reason.
         """
         if not self.auto_mode.get(user_id):
             return {"status": "skipped", "reason": "auto_mode disabled"}
 
         client = self.get_client(user_id)
         if not client:
-            return {"status": "error", "reason": "no client"}
+            return {"status": "error", "reason": "no client connected"}
 
         agent = self.selected_agent.get(user_id, "paper")
-        # TODO: Implementar lógica por agente
-        # Por enquanto, apenas log
-        logger.info(f"[broker] Auto signal for {user_id}: {signal} via agent {agent}")
-        return {"status": "logged", "agent": agent, "signal": signal}
+        if agent == "paper":
+            return {"status": "skipped", "reason": "selected_agent is paper (simulation only)"}
+
+        # Validate required signal fields
+        symbol = signal.get("symbol")
+        side_raw = signal.get("side", "").upper()
+        if not symbol or side_raw not in ("LONG", "SHORT"):
+            return {"status": "error", "reason": f"invalid signal: symbol={symbol}, side={side_raw}"}
+
+        try:
+            # Map agent direction to Binance order side
+            order_side = OrderSide.BUY if side_raw == "LONG" else OrderSide.SELL
+
+            # Quantity: use signal quantity if provided, else compute from balance
+            quantity = signal.get("quantity")
+            if not quantity or quantity <= 0:
+                balance = await client.get_usdt_balance()
+                if balance <= 0:
+                    return {"status": "error", "reason": "zero USDT balance"}
+                # Default: risk 2% of balance per auto-trade
+                risk_usd = balance * 0.02
+                price = signal.get("entry_price") or await client.get_price(symbol)
+                if price <= 0:
+                    return {"status": "error", "reason": f"invalid price for {symbol}"}
+                quantity = round(risk_usd / price, 6)
+
+            if quantity <= 0:
+                return {"status": "error", "reason": "computed quantity is zero"}
+
+            # Place MARKET order (auto-trading uses market execution)
+            order_result = await client.place_order(
+                symbol=symbol,
+                side=order_side,
+                order_type=OrderType.MARKET,
+                quantity=quantity,
+            )
+
+            # Optional: place SL order if stop_loss provided
+            stop_loss = signal.get("stop_loss")
+            if stop_loss and stop_loss > 0:
+                sl_side = OrderSide.SELL if side_raw == "LONG" else OrderSide.BUY
+                try:
+                    await client.place_order(
+                        symbol=symbol,
+                        side=sl_side,
+                        order_type=OrderType.STOP_MARKET,
+                        quantity=quantity,
+                        stop_price=float(stop_loss),
+                        reduce_only=True,
+                    )
+                except Exception as sl_err:
+                    logger.warning(f"[broker] Failed to place SL order: {sl_err}")
+
+            # Optional: place TP order if take_profit provided
+            take_profit = signal.get("take_profit")
+            if take_profit and take_profit > 0:
+                tp_side = OrderSide.SELL if side_raw == "LONG" else OrderSide.BUY
+                try:
+                    await client.place_order(
+                        symbol=symbol,
+                        side=tp_side,
+                        order_type=OrderType.TAKE_PROFIT_MARKET,
+                        quantity=quantity,
+                        stop_price=float(take_profit),
+                        reduce_only=True,
+                    )
+                except Exception as tp_err:
+                    logger.warning(f"[broker] Failed to place TP order: {tp_err}")
+
+            logger.info(
+                f"[broker] AUTO ORDER EXECUTED: {side_raw} {symbol} qty={quantity:.6f} "
+                f"via agent={agent} order_id={order_result.order_id}"
+            )
+            return {
+                "status": "executed",
+                "order_id": order_result.order_id,
+                "symbol": symbol,
+                "side": side_raw,
+                "quantity": quantity,
+                "avg_price": order_result.avg_price,
+                "agent": agent,
+            }
+
+        except Exception as e:
+            logger.error(f"[broker] Auto trade failed for {user_id}: {e}", exc_info=True)
+            return {"status": "error", "reason": str(e)}
+
+    async def process_agent_signal(self, user_id: str, agent_name: str, signal: dict) -> dict | None:
+        """
+        Called by agent trade engines after opening a paper/sim trade.
+        Checks if auto_mode is enabled and selected_agent matches, then places real order.
+
+        Args:
+            user_id:    User identifier (typically "default" for single-user)
+            agent_name: Name of the agent ("worker", "groq", "scalper")
+            signal:     Dict with symbol, side, confidence, entry_price, stop_loss, take_profit, quantity
+
+        Returns:
+            Result dict from execute_signal_auto, or None if auto-trading not triggered.
+        """
+        if not self.auto_mode.get(user_id):
+            return None
+
+        selected = self.selected_agent.get(user_id, "paper")
+        if selected != agent_name:
+            return None
+
+        logger.info(
+            f"[broker] Agent '{agent_name}' signal received — auto-trading active, executing..."
+        )
+        signal["agent_suggestion"] = agent_name
+        return await self.execute_signal_auto(user_id, signal)
 
 
 # Instância singleton

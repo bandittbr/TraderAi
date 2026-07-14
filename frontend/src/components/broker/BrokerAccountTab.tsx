@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import { getBrokerBalance, getBrokerPositions, getBrokerOpenOrders } from "@/lib/api";
-import type { BrokerPosition, BrokerOrderResponse } from "@/types";
+import type { BrokerPosition, BrokerOrderResponse, BrokerBalance, BrokerStatusResponse } from "@/types";
 
 interface BrokerAccountTabProps {
-  status: any;
+  status: BrokerStatusResponse | null;
   onRefresh: () => Promise<void>;
 }
 
 export default function BrokerAccountTab({ status, onRefresh }: BrokerAccountTabProps) {
-  const [balances, setBalances] = useState<any[]>([]);
-  const [positions, setPositions] = useState<any[]>([]);
-  const [openOrders, setOpenOrders] = useState<any[]>([]);
+  const [balances, setBalances] = useState<BrokerBalance[]>([]);
+  const [positions, setPositions] = useState<BrokerPosition[]>([]);
+  const [openOrders, setOpenOrders] = useState<BrokerOrderResponse[]>([]);
   const [loading, setLoading] = useState(false);
 
   function formatNumber(n: number, decimals = 4): string {
@@ -27,7 +27,7 @@ export default function BrokerAccountTab({ status, onRefresh }: BrokerAccountTab
         getBrokerPositions(),
         getBrokerOpenOrders(),
       ]);
-      if (bal) setBalances(bal.balances.filter((b: any) => b.total > 0).sort((a: any, b: any) => b.total - a.total));
+      if (bal) setBalances(bal.balances.filter((b) => b.total > 0).sort((a, b) => b.total - a.total));
       if (pos) setPositions(pos.positions);
       if (ord) setOpenOrders(ord.orders);
     } catch (e) {
@@ -60,9 +60,9 @@ export default function BrokerAccountTab({ status, onRefresh }: BrokerAccountTab
             </thead>
             <tbody>
               {balances
-                .filter((b: any) => b.total > 0)
-                .sort((a: any, b: any) => b.total - a.total)
-                .map((bal: any) => (
+                .filter((b) => b.total > 0)
+                .sort((a, b) => b.total - a.total)
+                .map((bal) => (
                   <tr key={bal.asset} className="border-b border-[#1f2937] hover:bg-[#0a0e1a]">
                     <td className="p-3 font-bold text-white">{bal.asset}</td>
                     <td className="p-3 font-mono text-[#9ca3af]">{bal.free.toLocaleString("en-US", { minimumFractionDigits: 6, maximumFractionDigits: 6 })}</td>
