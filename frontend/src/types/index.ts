@@ -465,3 +465,108 @@ export interface BrokerModeConfig {
   mode: BrokerMode;
   selected_agent?: string; // "worker" | "scalper" | "paper" | "groq"
 }
+
+// ── 10 Multi-Agent Trading System ─────────────────────────────────────────────
+
+export interface AgentInfo {
+  name:           string;
+  description:    string;
+  enabled:        boolean;
+  last_execution: string | null;
+}
+
+export interface AgentsListResponse {
+  agents: AgentInfo[];
+}
+
+export interface AgentAccountResponse {
+  id:              number;
+  agent_name:      string;
+  balance:         number;
+  initial_balance: number;
+  peak_balance:    number;
+  total_pnl:       number;
+  total_trades:    number;
+  winning_trades:  number;
+  losing_trades:   number;
+  enabled:         boolean;
+  updated_at:      string | null;
+}
+
+export interface AgentTradeResponse {
+  id:                   number;
+  agent_name:           string;
+  symbol:               string;
+  timeframe_entry:      string;
+  trade_side:           string;
+  entry_price:          number;
+  exit_price:           number | null;
+  quantity:             number;
+  leverage:             number;
+  stop_loss_price:      number;
+  take_profit_price:    number | null;
+  take_profit2_price:   number | null;
+  take_profit3_price:   number | null;
+  break_even_activated: boolean;
+  trailing_stop_active: boolean;
+  partial_tp1_hit:      boolean;
+  partial_tp2_hit:      boolean;
+  confidence:           number;
+  regime_at_entry:      string;
+  volatility_at_entry:  number;
+  pnl:                  number | null;
+  pnl_pct:              number | null;
+  fee_cost_pct:         number | null;
+  net_pnl_pct:          number | null;
+  status:               string;
+  close_reason:         string | null;
+  entry_reason:         string | null;
+  opened_at:            string;
+  closed_at:            string | null;
+  duration_minutes:     number | null;
+  unrealized_pnl:       number | null;
+  unrealized_pnl_pct:   number | null;
+}
+
+export interface AgentStatsResponse {
+  agent_name:       string;
+  period_days:      number;
+  total_trades:     number;
+  open_trades:      number;
+  win_rate:         number;
+  profit_factor:    number;
+  total_pnl_usd:    number;
+  total_pnl_pct:    number;
+  avg_trade_pnl:    number;
+  avg_win_pct:      number;
+  avg_loss_pct:     number;
+  max_win_pct:      number;
+  max_loss_pct:     number;
+  net_win_rate:     number;
+  net_profit_factor: number;
+  total_net_pnl_pct: number;
+  avg_duration_min:  number;
+  balance:          number;
+  initial_balance:  number;
+  peak_balance:     number;
+  by_symbol:        Record<string, { trades: number; pnl: number; wins: number }>;
+  by_reason:        Record<string, number>;
+}
+
+export interface AgentsLeaderboardEntry {
+  name:              string;
+  status:            string;
+  win_rate:          number;
+  profit_factor:     number;
+  total_pnl_pct:     number;
+  total_trades:      number;
+  net_win_rate:      number;
+  net_profit_factor: number;
+  total_net_pnl_pct: number;
+  balance:           number;
+  best:              boolean;
+}
+
+export interface AgentsLeaderboardResponse {
+  agents: AgentsLeaderboardEntry[];
+}

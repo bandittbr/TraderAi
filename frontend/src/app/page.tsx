@@ -9,6 +9,7 @@ import {
   getAgentsStatus,
   getFearGreed,
   getMarketStats,
+  getAgentsLeaderboard,
 } from "@/lib/api";
 import type {
   PaperStatsResponse,
@@ -17,6 +18,7 @@ import type {
   AgentsStatusResponse,
   FearGreedData,
   MarketStatsResponse,
+  AgentsLeaderboardEntry,
 } from "@/types/index";
 
 // ── Defensive helpers ─────────────────────────────────────────────────────────
@@ -291,6 +293,7 @@ export default function ControlCenter() {
   // Market data
   const [btc, setBtc]             = useState<MarketStatsResponse | null>(null);
   const [fearGreed, setFearGreed] = useState<FearGreedData | null>(null);
+  const [leaderboard, setLeaderboard] = useState<AgentsLeaderboardEntry[] | null>(null);
 
   useEffect(() => {
     // ── Agent accounts ──
@@ -302,6 +305,9 @@ export default function ControlCenter() {
     // ── Market data ──
     getMarketStats("BTCUSDT").then(d => setBtc(d)).catch(() => {});
     getFearGreed().then(d => setFearGreed(d)).catch(() => {});
+
+    // ── Agents Leaderboard ──
+    getAgentsLeaderboard().then(d => { if (d) setLeaderboard(d.agents); }).catch(() => {});
 
     // ── Regime ──
     const regimeUrl = "/api/v1/analytics/regime/BTCUSDT?timeframe=1h&history_limit=1";
@@ -391,14 +397,14 @@ export default function ControlCenter() {
       href: "/scalper",
       status: agentStatusMap["Scalper"] ?? "offline",
     },
-{
+    {
       name: "Paper",
-      balance: paper?.balance ?? 200,
-      initial: paper?.initial_balance ?? 200,
+      balance: paper?.current_balance ?? 200,
+      initial: 200,
       pnl: paper?.total_pnl ?? 0,
-      pnlPct: paper ? ((paper.balance / paper.initial_balance) - 1) * 100 : 0,
+      pnlPct: paper ? ((paper.current_balance / 200) - 1) * 100 : 0,
       color: "#2563eb",
-      icon: "◆",
+      icon: "\u25c6",
       href: "/paper-trading",
       status: agentStatusMap["Paper"] ?? "offline",
       trades: paper?.closed_trades,
@@ -406,6 +412,53 @@ export default function ControlCenter() {
       losses: paper ? paper.closed_trades - Math.round(paper.closed_trades * paper.win_rate / 100) : undefined,
     },
   ];
+
+  // ── 10 Multi-Agent Trading System ───────────────────────────────────────
+  const multiAgentColors: Record<string, string> = {
+    "Momentum RSI": "#ef4444",
+    "High Vol Continuation": "#f97316",
+    "AI Combined": "#8b5cf6",
+    "Social Sentiment": "#06b6d4",
+    "Portfolio Cycle": "#10b981",
+    "Grid Scalper": "#eab308",
+    "Mean Reversion": "#3b82f6",
+    "Trend Follower": "#14b8a6",
+    "Multi-Asset": "#ec4899",
+    "Breakout": "#a855f7",
+  };
+  const multiAgentIcons: Record<string, string> = {
+    "Momentum RSI": "\u21c5",
+    "High Vol Continuation": "\u26a1",
+    "AI Combined": "\u2728",
+    "Social Sentiment": "\ud83d\udcac",
+    "Portfolio Cycle": "\ud83d\udd04",
+    "Grid Scalper": "\u2699",
+    "Mean Reversion": "\u21c9",
+    "Trend Follower": "\u2b06",
+    "Multi-Asset": "\ud83d\udcca",
+    "Breakout": "\ud83d\udca5",
+  };
+
+  if (leaderboard) {
+    for (const entry of leaderboard) {
+      const color = multiAgentColors[entry.name] ?? "#6b7280";
+      const icon = multiAgentIcons[entry.name] ?? "\u25c9";
+      agents.push({
+        name: entry.name,
+        balance: entry.balance || 100_000,
+        initial: 100_000,
+        pnl: entry.total_net_pnl_pct || 0,
+        pnlPct: entry.total_net_pnl_pct || 0,
+        color,
+        icon,
+        href: `/agents?name=${encodeURIComponent(entry.name)}`,
+        status: entry.status === "running" ? "online" : entry.status === "paused" ? "idle" : "offline",
+        trades: entry.total_trades,
+        wins: entry.total_trades > 0 ? Math.round(entry.total_trades * entry.win_rate / 100) : undefined,
+        losses: entry.total_trades > 0 ? entry.total_trades - Math.round(entry.total_trades * entry.win_rate / 100) : undefined,
+      });
+    }
+  }
 
   const totalBalance = agents.reduce((s, a) => s + a.balance, 0);
   const totalInitial = agents.reduce((s, a) => s + a.initial, 0);
@@ -482,7 +535,7 @@ export default function ControlCenter() {
           </div>
           <h1 className="text-2xl font-bold text-white leading-none">Control Center</h1>
           <p className="text-xs text-[#2d4060] mt-1.5">
-            4 agentes ativos · Deterministico · Multi-Strategy
+            {agents.length} agentes ativos · Deterministico · Multi-Strategy
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -529,7 +582,7 @@ export default function ControlCenter() {
             </span>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {agents.map(a => <AgentCard key={a.name} agent={a} />)}
         </div>
       </section>

@@ -15,11 +15,6 @@ import type {
   AgentsStatusResponse,
   WorkerAccountResponse,
   ScalperAccountResponse,
-  GroqAccountResponse,
-  GroqStatsResponse,
-  GroqTradeResponse,
-  GroqThinkingResponse,
-  GroqDebugResponse,
   BrokerAccountResponse,
   BrokerPosition,
   BrokerOrderResponse,
@@ -345,5 +340,66 @@ export async function getBrokerPrice(symbol: string): Promise<{ symbol: string; 
 
 export async function getBrokerKlines(symbol: string, interval: string = "1h", limit: number = 100): Promise<{ symbol: string; interval: string; klines: any[] } | null> {
   try { return await fetchJSON(`/broker/klines/${symbol}?interval=${interval}&limit=${limit}`); }
+  catch { return null; }
+}
+
+// ── 10 Multi-Agent Trading System ─────────────────────────────────────────────
+
+import type {
+  AgentInfo,
+  AgentsListResponse,
+  AgentAccountResponse,
+  AgentTradeResponse,
+  AgentStatsResponse,
+  AgentsLeaderboardResponse,
+} from "@/types";
+
+export async function getAgentsList(): Promise<AgentsListResponse | null> {
+  try { return await fetchJSON<AgentsListResponse>("/agents"); }
+  catch { return null; }
+}
+
+export async function getAgentInfo(name: string): Promise<AgentInfo | null> {
+  try { return await fetchJSON<AgentInfo>(`/agents/${name}`); }
+  catch { return null; }
+}
+
+export async function getAgentAccount(name: string): Promise<AgentAccountResponse | null> {
+  try { return await fetchJSON<AgentAccountResponse>(`/agents/${name}/account`); }
+  catch { return null; }
+}
+
+export async function getAgentTrades(name: string, status?: string, limit = 50): Promise<AgentTradeResponse[]> {
+  try {
+    const params = new URLSearchParams();
+    if (status) params.append("status", status);
+    params.append("limit", String(limit));
+    return await fetchJSON<AgentTradeResponse[]>(`/agents/${name}/trades?${params}`);
+  }
+  catch { return []; }
+}
+
+export async function getAgentOpenTrades(name: string): Promise<AgentTradeResponse[]> {
+  try { return await fetchJSON<AgentTradeResponse[]>(`/agents/${name}/open-trades`); }
+  catch { return []; }
+}
+
+export async function getAgentStats(name: string, days = 30): Promise<AgentStatsResponse | null> {
+  try { return await fetchJSON<AgentStatsResponse>(`/agents/${name}/stats?days=${days}`); }
+  catch { return null; }
+}
+
+export async function getAgentsLeaderboard(days = 30): Promise<AgentsLeaderboardResponse | null> {
+  try { return await fetchJSON<AgentsLeaderboardResponse>(`/agents/leaderboard?days=${days}`); }
+  catch { return null; }
+}
+
+export async function enableAgent(name: string): Promise<{ status: string; agent: string; enabled: boolean } | null> {
+  try { return await fetchJSON(`/agents/${name}/enable`, { method: "POST" }); }
+  catch { return null; }
+}
+
+export async function disableAgent(name: string): Promise<{ status: string; agent: string; enabled: boolean } | null> {
+  try { return await fetchJSON(`/agents/${name}/disable`, { method: "POST" }); }
   catch { return null; }
 }
