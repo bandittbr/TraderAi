@@ -24,7 +24,6 @@ const allAgents: RankingEntry[] = [
 
 type Period = "Hoje" | "7D" | "30D" | "Total";
 const periods: Period[] = ["Hoje", "7D", "30D", "Total"];
-
 const medals = ["🥇", "🥈", "🥉"];
 
 export default function RankingAgents() {
@@ -36,23 +35,23 @@ export default function RankingAgents() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.45 }}
       className="rounded-xl p-3"
-      style={{ background: "#080c14", border: "1px solid #1a2540" }}
+      style={{ background: "#0a0f1e", border: "1px solid #1a2a4a" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-white">🏆</span>
-          <span className="text-[10px] font-bold text-white uppercase tracking-wider">Ranking de Agentes</span>
+          <span className="text-[10px] font-bold text-text-primary">🏆</span>
+          <span className="text-[10px] font-bold text-text-primary uppercase tracking-wider">Ranking de Agentes</span>
         </div>
-        <div className="flex gap-1 bg-[#050816] rounded-lg p-0.5">
+        <div className="flex gap-1 bg-bg-tertiary rounded-lg p-0.5">
           {periods.map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
               className={`px-2 py-0.5 text-[9px] font-medium rounded-md transition-all ${
                 period === p
-                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-[#2d4060] hover:text-[#4a6080]"
+                  ? "bg-neon-blue/20 text-neon-blue border border-neon-blue/30"
+                  : "text-text-dim hover:text-text-secondary"
               }`}
             >
               {p}
@@ -74,7 +73,7 @@ export default function RankingAgents() {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.04 }}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#0a0e1a40] transition-colors relative overflow-hidden"
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/2 transition-colors relative overflow-hidden"
             >
               {/* Background bar */}
               <div
@@ -87,27 +86,27 @@ export default function RankingAgents() {
                 {isMedal ? (
                   <span className="text-sm">{medals[i]}</span>
                 ) : (
-                  <span className="text-[10px] text-[#2d4060] font-mono">#{agent.rank}</span>
+                  <span className="text-[10px] text-text-dim font-mono">#{agent.rank}</span>
                 )}
               </div>
 
               {/* Name */}
               <div className="flex-1 relative">
-                <span className="text-[10px] text-white font-medium">{agent.name}</span>
+                <span className="text-[10px] text-text-primary font-medium">{agent.name}</span>
               </div>
 
               {/* Stats */}
               <div className="flex items-center gap-3 relative">
                 <div className="text-right">
-                  <div className={`text-[10px] font-bold font-mono ${agent.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  <div className={`text-[10px] font-bold font-mono ${agent.pnl >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                     {agent.pnl >= 0 ? "+" : ""}${agent.pnl.toLocaleString()}
                   </div>
                 </div>
                 <div className="text-right w-10">
-                  <div className="text-[9px] font-mono text-[#2d4060]">{agent.trades}t</div>
+                  <div className="text-[9px] font-mono text-text-dim">{agent.trades}t</div>
                 </div>
                 <div className="text-right w-10">
-                  <div className="text-[9px] font-mono text-emerald-400">{agent.winRate}%</div>
+                  <div className="text-[9px] font-mono text-neon-green">{agent.winRate}%</div>
                 </div>
               </div>
             </motion.div>

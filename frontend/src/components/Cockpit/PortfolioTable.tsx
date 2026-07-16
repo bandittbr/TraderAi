@@ -28,63 +28,66 @@ export default function PortfolioTable() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.35 }}
       className="rounded-xl overflow-hidden"
-      style={{ background: "#080c14", border: "1px solid #1a2540" }}
+      style={{ background: "#0a0f1e", border: "1px solid #1a2a4a" }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1a2540]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: "#1a2a4a" }}>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-white">💼</span>
-          <span className="text-[10px] font-bold text-white uppercase tracking-wider">Portfólio — Posições Abertas</span>
+          <span className="text-[10px] font-bold text-text-primary">💼</span>
+          <span className="text-[10px] font-bold text-text-primary uppercase tracking-wider">Portfólio — Posições Abertas</span>
         </div>
         <div className="flex items-center gap-3 text-[9px]">
-          <span className="text-[#2d4060]">Exposição: <span className="text-white font-mono">$84,250</span></span>
-          <span className="text-[#2d4060]">Risco: <span className="text-amber-400 font-mono">2.4%</span></span>
-          <span className="text-emerald-400 font-mono font-bold">+$2,847.50</span>
+          <span className="text-text-dim">Exposição: <span className="text-text-primary font-mono">$84,250</span></span>
+          <span className="text-text-dim">Risco: <span className="text-neon-amber font-mono">2.4%</span></span>
+          <span className="text-neon-green font-mono font-bold">+$2,847.50</span>
         </div>
       </div>
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-[10px]">
+        <table className="w-full text-[10px] cockpit-table">
           <thead>
-            <tr className="border-b border-[#1a2540]">
+            <tr className="border-b" style={{ borderColor: "#1a2a4a" }}>
               {["Ativo", "Direção", "Entrada", "Atual", "P&L", "Alav.", "Size", "Agente"].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-[8px] text-[#2d4060] uppercase tracking-wider font-medium">{h}</th>
+                <th key={h} className="px-3 py-2 text-left text-[8px] text-text-dim uppercase tracking-wider font-medium">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {positions.map((p, i) => {
-              const pnlColor = p.pnlPct >= 0 ? "text-emerald-400" : "text-red-400";
+              const pnlColor = p.pnlPct >= 0 ? "text-neon-green" : "text-neon-red";
               return (
                 <motion.tr
                   key={p.asset + p.direction}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="border-b border-[#141c2e] hover:bg-[#0a0e1a40] transition-colors"
+                  className="border-b hover:bg-white/2 transition-colors"
+                  style={{ borderColor: "#141c2e" }}
                 >
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-white">{p.asset}</span>
+                      <span className="font-bold text-text-primary">{p.asset}</span>
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
                     <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${
-                      p.direction === "LONG" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
+                      p.direction === "LONG"
+                        ? "bg-neon-green/10 text-neon-green border border-neon-green/20"
+                        : "bg-neon-red/10 text-neon-red border border-neon-red/20"
                     }`}>
                       {p.direction}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-[#8aa4c8]">${p.entry.toLocaleString()}</td>
-                  <td className="px-3 py-2.5 font-mono text-white">${p.current.toLocaleString()}</td>
+                  <td className="px-3 py-2.5 font-mono text-text-dim">${p.entry.toLocaleString()}</td>
+                  <td className="px-3 py-2.5 font-mono text-text-primary">${p.current.toLocaleString()}</td>
                   <td className={`px-3 py-2.5 font-mono font-bold ${pnlColor}`}>
                     {p.pnlPct >= 0 ? "+" : ""}{p.pnlPct.toFixed(2)}%
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-[#2d4060]">{p.leverage}x</td>
-                  <td className="px-3 py-2.5 font-mono text-[#2d4060]">{p.size}</td>
+                  <td className="px-3 py-2.5 font-mono text-text-dim">{p.leverage}x</td>
+                  <td className="px-3 py-2.5 font-mono text-text-dim">{p.size}</td>
                   <td className="px-3 py-2.5">
-                    <span className="text-[9px] text-[#8aa4c8]">{p.agent}</span>
+                    <span className="text-[9px] text-text-dim">{p.agent}</span>
                   </td>
                 </motion.tr>
               );

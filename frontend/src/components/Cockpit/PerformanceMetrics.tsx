@@ -44,9 +44,9 @@ export default function PerformanceMetrics() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.25 }}
       className="rounded-xl p-3"
-      style={{ background: "#080c14", border: "1px solid #1a2540" }}
+      style={{ background: "#0a0f1e", border: "1px solid #1a2a4a" }}
     >
-      <div className="text-[9px] text-[#2d4060] uppercase tracking-widest mb-2.5 font-semibold">📊 Performance Metrics</div>
+      <div className="text-[9px] text-text-dim uppercase tracking-widest mb-2.5 font-semibold">📊 Performance Metrics</div>
       <div className="grid grid-cols-6 gap-2">
         {metrics.map((m, i) => (
           <motion.div
@@ -55,15 +55,15 @@ export default function PerformanceMetrics() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
             className="rounded-lg p-2.5 flex flex-col"
-            style={{ background: "#050816", border: "1px solid #1a2540" }}
+            style={{ background: "#050816", border: "1px solid #1a2a4a" }}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[8px] text-[#2d4060] uppercase tracking-wider">{m.label}</span>
+              <span className="text-[8px] text-text-dim uppercase tracking-wider">{m.label}</span>
               {m.sparkData && <Sparkline data={m.sparkData} color={m.positive ? "#22c55e" : "#ef4444"} />}
             </div>
-            <span className="text-sm font-bold font-mono text-white mt-0.5">{m.value}</span>
+            <span className="text-sm font-bold font-mono text-text-primary mt-0.5">{m.value}</span>
             {m.change && (
-              <span className={`text-[9px] font-mono ${m.positive ? "text-emerald-400" : "text-red-400"}`}>
+              <span className={`text-[9px] font-mono ${m.positive ? "text-neon-green" : "text-neon-red"}`}>
                 {m.change}
               </span>
             )}

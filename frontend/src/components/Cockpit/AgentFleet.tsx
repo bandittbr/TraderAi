@@ -32,17 +32,17 @@ export default function AgentFleet() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.4 }}
       className="rounded-xl p-3"
-      style={{ background: "#080c14", border: "1px solid #1a2540" }}
+      style={{ background: "#0a0f1e", border: "1px solid #1a2a4a" }}
     >
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-white">🤖</span>
-          <span className="text-[10px] font-bold text-white uppercase tracking-wider">Frota de Agentes IA</span>
+          <span className="text-[10px] font-bold text-text-primary">🤖</span>
+          <span className="text-[10px] font-bold text-text-primary uppercase tracking-wider">Frota de Agentes IA</span>
         </div>
         <div className="flex items-center gap-2 text-[9px]">
-          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{agents.filter(a => a.status === "online").length} ativos</span>
-          <span className="text-[#2d4060]">|</span>
-          <span className="text-[#2d4060]">{agents.length} total</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-neon-green" />{agents.filter(a => a.status === "online").length} ativos</span>
+          <span className="text-text-dim">|</span>
+          <span className="text-text-dim">{agents.length} total</span>
         </div>
       </div>
 
@@ -63,7 +63,7 @@ export default function AgentFleet() {
             />
 
             {/* Agent header */}
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 relative">
               <div
                 className="w-6 h-6 rounded-md flex items-center justify-center text-xs"
                 style={{ background: `${agent.color}20`, border: `1px solid ${agent.color}40`, color: agent.color }}
@@ -71,13 +71,13 @@ export default function AgentFleet() {
                 {agent.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-bold text-white truncate">{agent.name}</div>
-                <div className="text-[8px] text-[#2d4060] truncate">{agent.strategy}</div>
+                <div className="text-[10px] font-bold text-text-primary truncate">{agent.name}</div>
+                <div className="text-[8px] text-text-dim truncate">{agent.strategy}</div>
               </div>
               <div className="flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${
-                  agent.status === "online" ? "bg-emerald-500 shadow-[0_0_6px_#10b981]" :
-                  agent.status === "idle" ? "bg-amber-500" : "bg-[#2d4060]"
+                  agent.status === "online" ? "bg-neon-green shadow-[0_0_6px_#10b981]" :
+                  agent.status === "idle" ? "bg-neon-amber" : "bg-text-dim"
                 }`} />
               </div>
             </div>
@@ -85,28 +85,28 @@ export default function AgentFleet() {
             {/* Stats grid */}
             <div className="grid grid-cols-3 gap-1">
               <div>
-                <div className="text-[7px] text-[#2d4060] uppercase tracking-wider">Hoje</div>
-                <div className={`text-[10px] font-bold font-mono ${agent.pnlToday >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                <div className="text-[7px] text-text-dim uppercase tracking-wider">Hoje</div>
+                <div className={`text-[10px] font-bold font-mono ${agent.pnlToday >= 0 ? "text-neon-green" : "text-neon-red"}`}>
                   {agent.pnlToday >= 0 ? "+" : ""}${agent.pnlToday.toLocaleString()}
                 </div>
               </div>
               <div>
-                <div className="text-[7px] text-[#2d4060] uppercase tracking-wider">Trades</div>
-                <div className="text-[10px] font-bold font-mono text-white">{agent.trades}</div>
+                <div className="text-[7px] text-text-dim uppercase tracking-wider">Trades</div>
+                <div className="text-[10px] font-bold font-mono text-text-primary">{agent.trades}</div>
               </div>
               <div>
-                <div className="text-[7px] text-[#2d4060] uppercase tracking-wider">Win</div>
-                <div className="text-[10px] font-bold font-mono text-emerald-400">{agent.winRate}%</div>
+                <div className="text-[7px] text-text-dim uppercase tracking-wider">Win</div>
+                <div className="text-[10px] font-bold font-mono text-neon-green">{agent.winRate}%</div>
               </div>
             </div>
 
             {/* Capital bar */}
-            <div className="mt-2 pt-1.5 border-t border-[#1a2540]">
+            <div className="mt-2 pt-1.5 border-t relative" style={{ borderColor: "#1a2a4a" }}>
               <div className="flex justify-between text-[8px]">
-                <span className="text-[#2d4060]">Capital</span>
-                <span className="text-[#8aa4c8] font-mono">${agent.capital.toLocaleString()}</span>
+                <span className="text-text-dim">Capital</span>
+                <span className="text-text-secondary font-mono">${agent.capital.toLocaleString()}</span>
               </div>
-              <div className="h-1 rounded-full bg-[#1a2540] mt-0.5 overflow-hidden">
+              <div className="h-1 rounded-full bg-border-primary mt-0.5 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{ width: `${(agent.capital / 25000) * 100}%`, background: agent.color }}

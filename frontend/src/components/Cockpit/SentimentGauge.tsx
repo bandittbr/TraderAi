@@ -19,7 +19,7 @@ const sentimentConfig = {
 export default function SentimentGauge() {
   const fearGreedValue = 72;
   const classification = fearGreedValue > 60 ? "GANÂNCIA" : fearGreedValue > 40 ? "NEUTRO" : "MEDO";
-  const labelColor = fearGreedValue > 60 ? "text-emerald-400" : fearGreedValue > 40 ? "text-[#8aa4c8]" : "text-red-400";
+  const labelColor = fearGreedValue > 60 ? "text-neon-green" : fearGreedValue > 40 ? "text-text-secondary" : "text-neon-red";
 
   return (
     <motion.div
@@ -27,26 +27,26 @@ export default function SentimentGauge() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.5 }}
       className="rounded-xl p-3"
-      style={{ background: "#080c14", border: "1px solid #1a2540" }}
+      style={{ background: "#0a0f1e", border: "1px solid #1a2a4a" }}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[10px] font-bold text-white">📰</span>
-        <span className="text-[10px] font-bold text-white uppercase tracking-wider">Sentimento + Notícias</span>
+        <span className="text-[10px] font-bold text-text-primary">📰</span>
+        <span className="text-[10px] font-bold text-text-primary uppercase tracking-wider">Sentimento + Notícias</span>
       </div>
 
       <div className="flex gap-3">
         {/* Fear & Greed Gauge */}
         <div className="w-[120px] shrink-0">
-          <div className="rounded-lg p-2.5 text-center" style={{ background: "#050816", border: "1px solid #1a2540" }}>
-            <div className="text-[8px] text-[#2d4060] uppercase tracking-wider mb-1">Fear & Greed</div>
+          <div className="rounded-lg p-2.5 text-center" style={{ background: "#050816", border: "1px solid #1a2a4a" }}>
+            <div className="text-[8px] text-text-dim uppercase tracking-wider mb-1">Fear & Greed</div>
             {/* Gauge */}
             <div className="relative h-16 flex items-center justify-center mb-1">
               <svg width="80" height="64" viewBox="0 0 80 64">
                 <path
                   d="M 5 56 A 38 38 0 0 1 75 56"
                   fill="none"
-                  stroke="#1a2540"
+                  stroke="#1a2a40"
                   strokeWidth="8"
                   strokeLinecap="round"
                 />
@@ -77,10 +77,10 @@ export default function SentimentGauge() {
                   strokeWidth="1.5"
                   opacity="0.8"
                 />
-                <circle cx={40} cy={56} r="3" fill="white" />
+                <circle cx={40} cy={56} r={3} fill="white" />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center mt-4">
-                <span className="text-lg font-bold font-mono text-white">{fearGreedValue}</span>
+                <span className="text-lg font-bold font-mono text-text-primary">{fearGreedValue}</span>
               </div>
             </div>
             <div className={`text-[9px] font-bold ${labelColor}`}>{classification}</div>
@@ -98,17 +98,17 @@ export default function SentimentGauge() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="flex items-start gap-2 py-1.5 px-2 rounded-lg hover:bg-[#0a0e1a40] transition-colors"
+                  className="flex items-start gap-2 py-1.5 px-2 rounded-lg hover:bg-white/2 transition-colors"
                 >
                   <span className="text-[9px] mt-0.5 shrink-0">
                     {item.sentiment === "positive" ? "📈" : item.sentiment === "negative" ? "📉" : "➡"}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[9px] text-[#8aa4c8] leading-tight truncate">{item.title}</div>
+                    <div className="text-[9px] text-text-secondary leading-tight truncate">{item.title}</div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[7px] text-[#2d4060]">{item.source}</span>
-                      <span className="text-[7px] text-[#2d4060]">•</span>
-                      <span className="text-[7px] text-[#2d4060]">Impacto: {item.impact}/10</span>
+                      <span className="text-[7px] text-text-dim">{item.source}</span>
+                      <span className="text-[7px] text-text-dim">•</span>
+                      <span className="text-[7px] text-text-dim">Impacto: {item.impact}/10</span>
                     </div>
                   </div>
                   <div
