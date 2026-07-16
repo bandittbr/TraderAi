@@ -7,7 +7,8 @@ interface NavItem {
   label:    string;
   icon:     string;
   href:     string;
-  external: boolean;
+  external?: boolean;
+  children?: NavItem[];
 }
 
 interface NavGroup {
@@ -19,8 +20,7 @@ const NAV_ITEMS: NavGroup[] = [
   {
     group: null,
     items: [
-      { label: "Cockpit",       icon: "cockp", href: "/cockpit",         external: false },
-      { label: "Control Center", icon: "home", href: "/",               external: false },
+      { label: "Cockpit", icon: "cockp", href: "/cockpit", external: false },
     ],
   },
   {
@@ -31,16 +31,36 @@ const NAV_ITEMS: NavGroup[] = [
     ],
   },
   {
-    group: "TRADERS & AGENTS",
+    group: "AGENTS",
     items: [
-      { label: "Paper",    icon: "paper", href: "/paper-trading", external: false },
-      { label: "Scalper",  icon: "scalp", href: "/scalper",       external: false },
-      { label: "Worker",   icon: "workr", href: "/worker",        external: false },
-      { label: "Agents",   icon: "agent", href: "/agents",        external: false },
+      { 
+        label: "Paper Trading", 
+        icon: "paper", 
+        href: "/paper-trading", 
+        external: false 
+      },
+      { 
+        label: "Scalper",  
+        icon: "scalp", 
+        href: "/scalper",       
+        external: false 
+      },
+      { 
+        label: "Worker",    
+        icon: "workr", 
+        href: "/worker",        
+        external: false 
+      },
+      { 
+        label: "Multi-Agents", 
+        icon: "agent", 
+        href: "/agents",        
+        external: false 
+      },
     ],
   },
   {
-    group: "CORRETORA",
+    group: "BROKER",
     items: [
       { label: "Binance Real", icon: "broker", href: "/broker", external: false },
     ],
@@ -70,20 +90,18 @@ const NAV_ITEMS: NavGroup[] = [
 
 const ICON_MAP: Record<string, string> = {
   cockp: "🎛",
-  home:  "⌘",
   chart: "◈",
-  paper: "◎",
   trade: "◉",
-  scalp: "⚡︎",
+  paper: "◎",
+  scalp: "⚡",
   workr: "⚙",
+  agent: "⊞",
   broker: "🏦",
   analy: "▲",
   alpha: "◆",
   robus: "◇",
   strat: "⬡",
   influ: "★",
-  agent: "⊞",
-  bielc: "⚙",
   apido: "⊞",
 };
 
@@ -95,35 +113,44 @@ export default function Sidebar() {
     return pathname.startsWith(href);
   };
 
+  const isGroupActive = (items: NavItem[]) => {
+    return items.some(item => isActive(item.href));
+  };
+
   return (
     <aside
       className="fixed inset-y-0 left-0 z-40 flex flex-col"
-      style={{ width: "220px", background: "#080c14", borderRight: "1px solid #141c2e" }}
+      style={{ width: "240px", background: "#050816", borderRight: "1px solid #1a2a4a" }}
     >
-      <div className="flex items-center gap-2.5 px-5 h-14 border-b border-[#141c2e] shrink-0">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-4 h-14 border-b" style={{ borderColor: "#1a2a4a" }}>
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold text-white"
-          style={{ background: "linear-gradient(135deg, #2563eb, #7c3aed)" }}
+          style={{ background: "linear-gradient(135deg, #3b82f6, #8b5cf6)" }}
         >
           T
         </div>
         <div className="leading-none">
           <div className="text-sm font-bold text-white tracking-wide">TradeAI</div>
-          <div className="text-[9px] text-[#3b4a6b] tracking-widest mt-0.5">AI TRADING COCKPIT</div>
+          <div className="text-[9px] text-text-dim tracking-widest mt-0.5">AI TRADING COCKPIT</div>
         </div>
       </div>
 
+      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         {NAV_ITEMS.map(({ group, items }) => (
           <div key={group ?? "__root"} className="mb-1">
             {group && (
-              <div className="px-3 pt-3 pb-1.5 text-[9px] font-semibold tracking-widest text-[#2d3d5a]">
+              <div className="px-3 pt-3 pb-1.5 text-[9px] font-semibold tracking-widest text-text-dim uppercase">
                 {group}
               </div>
             )}
-            {items.map(({ label, icon, href, external }) => {
+            {items.map(({ label, icon, href, external, children }) => {
               const active = isActive(href);
               const iconChar = ICON_MAP[icon] || icon;
+              const hasChildren = children && children.length > 0;
+              const groupActive = hasChildren ? isGroupActive(children) : active;
+
               if (external) {
                 return (
                   <a
@@ -131,29 +158,30 @@ export default function Sidebar() {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-[#4a6080] hover:text-[#8aa4c8] hover:bg-[#0d1525] transition-all text-xs"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/2 transition-all text-xs"
                   >
                     <span className="text-sm w-4 text-center shrink-0 opacity-60">{iconChar}</span>
                     <span>{label}</span>
-                    <span className="ml-auto text-[9px] text-[#2d3d5a]">ext</span>
+                    <span className="ml-auto text-[9px] text-text-dim">ext</span>
                   </a>
                 );
               }
+
               return (
                 <Link
                   key={href}
                   href={href}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all border-l-2 pl-[10px] ${
                     active
-                      ? "bg-blue-600/15 text-blue-300 border-blue-500"
-                      : "text-[#4a6080] hover:text-[#8aa4c8] hover:bg-[#0d1525] border-transparent"
+                      ? "bg-neon-blue/10 text-neon-blue border-neon-blue"
+                      : "text-text-secondary hover:text-text-primary hover:bg-white/2 border-transparent"
                   }`}
                 >
-                  <span className={`text-sm w-4 text-center shrink-0 ${active ? "text-blue-400" : "opacity-50"}`}>
+                  <span className={`text-sm w-4 text-center shrink-0 ${active ? "text-neon-blue" : "opacity-50"}`}>
                     {iconChar}
                   </span>
                   <span className={active ? "font-medium" : ""}>{label}</span>
-                  {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+                  {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-neon-blue shrink-0" />}
                 </Link>
               );
             })}
@@ -161,9 +189,10 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-4 py-3 border-t border-[#141c2e] shrink-0">
-        <div className="text-[9px] text-[#1e2e45] leading-relaxed font-mono">
-          <div>v14.0.0 - Fase 14</div>
+      {/* Footer */}
+      <div className="px-4 py-3 border-t" style={{ borderColor: "#1a2a4a" }}>
+        <div className="text-[9px] text-text-dim leading-relaxed font-mono">
+          <div>v14.0.0 — Fase 14</div>
           <div>Quantitative Platform</div>
         </div>
       </div>
