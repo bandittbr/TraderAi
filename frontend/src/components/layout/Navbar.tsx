@@ -15,7 +15,6 @@ const ROUTE_LABELS: Record<string, string> = {
   "/system-health":    "System Health",
   "/scalper":          "Scalper Engine",
   "/worker":           "Worker Agent",
-  "/groq":             "Groq Agent",
 };
 
 type StatusLevel = "online" | "degraded" | "offline" | "loading";

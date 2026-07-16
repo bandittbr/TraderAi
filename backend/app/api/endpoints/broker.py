@@ -41,7 +41,7 @@ class AutoModeRequest(BaseModel):
 
 
 class AgentSelectRequest(BaseModel):
-    agent: str = Field(..., description="paper, worker, scalper, groq")
+    agent: str = Field(..., description="paper, worker, scalper")
 
 
 class OrderRequest(BaseModel):

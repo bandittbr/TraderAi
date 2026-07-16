@@ -29,15 +29,15 @@ const NAV_ITEMS: NavGroup[] = [
       { label: "Trade Mgmt",   icon: "trade", href: "/trade-management", external: false },
     ],
   },
-  {
-    group: "TRADERS AGENTS",
-    items: [
-      { label: "Paper",    icon: "paper", href: "/paper-trading", external: false },
-      { label: "Scalper",  icon: "scalp", href: "/scalper",       external: false },
-      { label: "Worker",   icon: "workr", href: "/worker",        external: false },
-      { label: "Groq",     icon: "groq",  href: "/groq",          external: false },
-    ],
-  },
+{
+      group: "TRADERS AGENTS",
+      items: [
+        { label: "Paper",    icon: "paper", href: "/paper-trading", external: false },
+        { label: "Scalper",  icon: "scalp", href: "/scalper",       external: false },
+        { label: "Worker",   icon: "workr", href: "/worker",        external: false },
+        { label: "Agents",   icon: "agent", href: "/agents",        external: false },
+      ],
+    },
   {
     group: "CORRETORA",
     items: [
@@ -74,13 +74,13 @@ const ICON_MAP: Record<string, string> = {
   trade: "◉",
   scalp: "⚡︎",   // lightning bolt with text variant (monochrome)
   workr: "⚙",
-  groq:  "🧠",
   broker: "🏦",
   analy: "▲",
   alpha: "◆",
   robus: "◇",
   strat: "⬡",
   influ: "★",
+  agent: "⊞",
   bielc: "⚙",
   apido: "⊞",
 };

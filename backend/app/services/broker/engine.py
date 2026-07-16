@@ -405,7 +405,7 @@ class BrokerEngine:
             side:       str   "LONG" or "SHORT"
             confidence: float 0-100
             regime:     str   e.g. "trend", "range"
-            agent_suggestion: str  e.g. "worker", "groq", "scalper"
+            agent_suggestion: str  e.g. "worker", "scalper"
         Additional optional: entry_price, stop_loss, take_profit, quantity
 
         Returns dict with order result or skip/error reason.
@@ -512,7 +512,7 @@ class BrokerEngine:
 
         Args:
             user_id:    User identifier (typically "default" for single-user)
-            agent_name: Name of the agent ("worker", "groq", "scalper")
+            agent_name: Name of the agent ("worker", "scalper")
             signal:     Dict with symbol, side, confidence, entry_price, stop_loss, take_profit, quantity
 
         Returns:

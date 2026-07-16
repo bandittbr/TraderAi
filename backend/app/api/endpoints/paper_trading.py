@@ -22,6 +22,10 @@ from app.services.paper_trading.trade_engine  import trade_engine
 from app.services.backtesting.backtest_engine import backtest_engine
 from app.config import settings
 from app.logger import get_logger
+from app.database import AsyncSessionLocal
+from app.models.paper_trading import PaperTrade, PaperAccount
+from app.services.market_data.store import store
+from sqlalchemy import select
 
 logger = get_logger(__name__)
 
@@ -86,6 +90,54 @@ async def get_paper_trades(
     if st in ("OPEN", "CLOSED"):
         all_trades = [t for t in all_trades if t.status == st]
     return [PaperTradeResponse.model_validate(t) for t in all_trades]
+
+
+# ── GET /paper/open-trades ───────────────────────────────────────────────────
+@router.get(
+    "/open-trades",
+    response_model=list[PaperTradeResponse],
+    summary="Trades abertos com P&L não realizado (unrealized) em tempo real",
+)
+async def get_paper_open_trades() -> list[PaperTradeResponse]:
+    """Retorna trades abertos com P&L não realizado calculado em tempo real."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(PaperTrade).where(PaperTrade.status == "OPEN")
+        )
+        open_trades = list(result.scalars().all())
+
+    # Buscar preço atual para cada símbolo
+    symbols = list(set(t.symbol for t in open_trades))
+    current_prices = {}
+    for sym in symbols:
+        stat = await store.get_stats(sym)
+        if stat:
+            current_prices[sym] = stat.price
+
+    # Calcular unrealized P&L
+    for trade in open_trades:
+        current_price = current_prices.get(trade.symbol)
+        if current_price and current_price > 0:
+            if trade.trade_side == "LONG":
+                pnl_pct = (current_price - trade.entry_price) / trade.entry_price
+            else:
+                pnl_pct = (trade.entry_price - current_price) / trade.entry_price
+
+            # Taxas (0.16% round-trip)
+            fee_pct = 0.0016
+            net_pnl_pct = pnl_pct - fee_pct
+
+            # P&L em USD
+            pnl_usd = trade.quantity * abs(current_price - trade.entry_price)
+            if trade.trade_side == "SHORT":
+                pnl_usd = -pnl_usd if current_price > trade.entry_price else pnl_usd
+            else:
+                pnl_usd = pnl_usd if current_price > trade.entry_price else -pnl_usd
+
+            trade.unrealized_pnl = round(pnl_usd, 2)
+            trade.unrealized_pnl_pct = round(net_pnl_pct * 100, 2)
+
+    return [PaperTradeResponse.model_validate(t) for t in open_trades]
 
 
 @router.get(

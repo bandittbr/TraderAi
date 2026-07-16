@@ -137,18 +137,4 @@ async def get_agents_status():
     except Exception:
         agents.append(AgentStatusEntry(name="Paper", status="offline"))
 
-    # ── Groq ──
-    try:
-        from app.services.groq_agent.trade_engine import groq_engine
-        le = groq_engine._last_execution
-        is_online = le is not None and (now - le.replace(tzinfo=timezone.utc)) < threshold
-        agents.append(AgentStatusEntry(
-            name="Groq",
-            status="online" if is_online else "idle",
-            last_execution=le.isoformat() if le else None,
-            interval_secs=60,
-        ))
-    except Exception:
-        agents.append(AgentStatusEntry(name="Groq", status="offline"))
-
     return AgentsStatusResponse(agents=agents)

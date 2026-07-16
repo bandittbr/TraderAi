@@ -129,7 +129,7 @@ WebSocket e o frontend consome essa API de forma assíncrona.
 | 11 | **Strategy Lab** | Evolution engine, gerador, avaliador |
 | 12 | **Trade Management** | Break Even, Trailing Stop, Partial TP, Exit Score |
 | 13 | **Scalper** | MTF scalping (1m/5m/15m), Sinais rápidos |
-| 14 | **Biel Agent** | IA Generativa (Groq/Gemini) + Instagram Publisher |
+| 14 | **Biel Agent** | IA Generativa (Gemini) + Instagram Publisher |
 
 ### Endpoints da API
 
@@ -301,11 +301,11 @@ Agente autônomo de Instagram que gera e publica posts com IA.
 ### Pipeline de post
 
 ```
-Context Builder → Brain (Groq/Gemini) → Visual Generator → Instagram API
+Context Builder → Brain (Gemini) → Visual Generator → Instagram API
 ```
 
 - **Context Builder**: coleta BTC price, regime, P&L, notícias, Fear & Greed
-- **Brain**: gera texto via Groq LLaMA 3.3-70B ou Gemini 2.0 Flash (auto-detecção pelo prefixo da chave)
+- **Brain**: gera texto via Gemini 2.0 Flash
 - **Visual Generator**: gera imagem com matplotlib
 - **Scheduler**: 4 posts/dia (8h, 12h, 18h, 22h UTC)
 - **Token Manager**: renovação automática 7 dias antes de expirar

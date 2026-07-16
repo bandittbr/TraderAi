@@ -17,6 +17,7 @@ from app.schemas.scalper import (
 from app.services.scalper.stats import get_scalper_stats
 from app.services.scalper.trade_engine import scalper_engine
 from app.services.scalper.risk_manager import scalper_risk
+from app.services.market_data.store import store
 
 router = APIRouter()
 
@@ -53,6 +54,51 @@ async def get_scalper_trades(
         result = await session.execute(q)
         trades = list(result.scalars().all())
     return [ScalperTradeOut.model_validate(t) for t in trades]
+
+
+# ── GET /scalper/open-trades ──────────────────────────────────────────────────
+@router.get("/open-trades", response_model=list[ScalperTradeOut])
+async def get_scalper_open_trades():
+    """Trades abertos com P&L não realizado (unrealized) em tempo real."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(ScalperTrade).where(ScalperTrade.status == "OPEN")
+        )
+        open_trades = list(result.scalars().all())
+
+    # Buscar preço atual para cada símbolo
+    symbols = list(set(t.symbol for t in open_trades))
+    current_prices = {}
+    for sym in symbols:
+        stat = await store.get_stats(sym)
+        if stat:
+            current_prices[sym] = stat.price
+
+    # Calcular unrealized P&L
+    for trade in open_trades:
+        current_price = current_prices.get(trade.symbol)
+        if current_price and current_price > 0:
+            if trade.trade_side == "LONG":
+                pnl_pct = (current_price - trade.entry_price) / trade.entry_price
+            else:
+                pnl_pct = (trade.entry_price - current_price) / trade.entry_price
+
+            # Com alavancagem (scalper usa 1x por padrão, mas pode variar)
+            leverage = getattr(trade, 'leverage', 1) or 1
+            pnl_pct_lev = pnl_pct * leverage
+            fee_pct = 0.0016 * leverage  # 0.16% round-trip
+            net_pnl_pct = pnl_pct_lev - fee_pct
+
+            pnl_usd = trade.quantity * abs(current_price - trade.entry_price) * leverage
+            if trade.trade_side == "SHORT":
+                pnl_usd = -pnl_usd if current_price > trade.entry_price else pnl_usd
+            else:
+                pnl_usd = pnl_usd if current_price > trade.entry_price else -pnl_usd
+
+            trade.unrealized_pnl = round(pnl_usd, 2)
+            trade.unrealized_pnl_pct = round(net_pnl_pct * 100, 2)
+
+    return [ScalperTradeOut.model_validate(t) for t in open_trades]
 
 
 # ── GET /scalper/stats ────────────────────────────────────────────────────────

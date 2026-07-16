@@ -8,7 +8,7 @@ from app.api.endpoints import (
     health, market, indicators, paper_trading, market_context,
     analytics, market_structure, smart_money, optimizer, alpha,
     robustness, strategies, trade_management, scalper, biel, worker,
-    trade_activity, groq_agent, ai_analyst, broker,
+    trade_activity, ai_analyst, broker, agents,
 )
 
 # Roteador raiz -- prefixo /api/v1 aplicado no main.py
@@ -70,14 +70,14 @@ router.include_router(biel.router, prefix="/biel", tags=["Biel"])
 # -- Trade Activity Log (agentes em tempo real) ----------------------------
 router.include_router(trade_activity.router, prefix="/agents", tags=["Trade Activity"])
 
-# -- Groq Agent (LLM-powered trading) -----------------------------------
-router.include_router(groq_agent.router, prefix="/agents", tags=["Groq Agent"])
-
 # -- AI Analyst (Gemini-powered system analysis) ------------------------
 router.include_router(ai_analyst.router, prefix="/ai", tags=["AI Analyst"])
 
 # -- Broker (Binance Real Trading) --------------------------------------
 router.include_router(broker.router, prefix="/broker", tags=["Corretora"])
+
+# -- Multi-Agent Trading System -----------------------------------------
+router.include_router(agents.router, prefix="/agents", tags=["Agentes"])
 
 # -- Placeholders ----------------------------------------------------------
 # router.include_router(broker.router,   prefix="/broker",   tags=["Corretora"])

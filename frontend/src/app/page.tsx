@@ -6,7 +6,6 @@ import {
   getPaperStats,
   getWorkerAccount,
   getScalperAccount,
-  getGroqAccount,
   getAgentsStatus,
   getFearGreed,
   getMarketStats,
@@ -15,7 +14,6 @@ import type {
   PaperStatsResponse,
   WorkerAccountResponse,
   ScalperAccountResponse,
-  GroqAccountResponse,
   AgentsStatusResponse,
   FearGreedData,
   MarketStatsResponse,
@@ -288,7 +286,6 @@ export default function ControlCenter() {
   const [worker, setWorker]   = useState<WorkerAccountResponse | null>(null);
   const [scalper, setScalper] = useState<ScalperAccountResponse | null>(null);
   const [paper, setPaper]     = useState<PaperStatsResponse | null>(null);
-  const [groq, setGroq]       = useState<GroqAccountResponse | null>(null);
   const [agentsStatus, setAgentsStatus] = useState<AgentsStatusResponse | null>(null);
 
   // Market data
@@ -300,7 +297,6 @@ export default function ControlCenter() {
     getPaperStats().then(d => { if (d) { setStats(d); setPaper(d); } }).catch(() => {});
     getWorkerAccount().then(d => setWorker(d)).catch(() => {});
     getScalperAccount().then(d => setScalper(d)).catch(() => {});
-    getGroqAccount().then(d => setGroq(d)).catch(() => {});
     getAgentsStatus().then(d => setAgentsStatus(d)).catch(() => {});
 
     // ── Market data ──
@@ -395,33 +391,19 @@ export default function ControlCenter() {
       href: "/scalper",
       status: agentStatusMap["Scalper"] ?? "offline",
     },
-    {
+{
       name: "Paper",
-      balance: paper?.current_balance ?? 10000,
-      initial: 10000,
+      balance: paper?.balance ?? 200,
+      initial: paper?.initial_balance ?? 200,
       pnl: paper?.total_pnl ?? 0,
-      pnlPct: paper?.total_pnl_pct ?? 0,
+      pnlPct: paper ? ((paper.balance / paper.initial_balance) - 1) * 100 : 0,
       color: "#2563eb",
-      icon: "\u25ce",
+      icon: "◆",
       href: "/paper-trading",
       status: agentStatusMap["Paper"] ?? "offline",
       trades: paper?.closed_trades,
       wins: paper ? Math.round(paper.closed_trades * paper.win_rate / 100) : undefined,
       losses: paper ? paper.closed_trades - Math.round(paper.closed_trades * paper.win_rate / 100) : undefined,
-    },
-    {
-      name: "Groq",
-      balance: groq?.balance ?? 10000,
-      initial: groq?.initial_balance ?? 10000,
-      pnl: groq?.total_pnl ?? 0,
-      pnlPct: groq ? ((groq.balance / groq.initial_balance) - 1) * 100 : 0,
-      color: "#8b5cf6",
-      icon: "\ud83e\udde0",
-      href: "/groq",
-      status: agentStatusMap["Groq"] ?? "offline",
-      trades: groq?.total_trades,
-      wins: groq?.winning_trades,
-      losses: groq?.losing_trades,
     },
   ];
 
@@ -588,7 +570,6 @@ export default function ControlCenter() {
                 ["DB",       "SQLite + aiosqlite"],
                 ["Frontend", "Next.js 14 + Tailwind"],
                 ["Dados",    "Binance REST + WS"],
-                ["LLM",      "Groq + Gemini"],
               ] as [string, string][]).map(([k, v]) => (
                 <div key={k} className="flex justify-between text-[10px]">
                   <span className="text-[#2d4060]">{k}</span>
@@ -614,7 +595,7 @@ export default function ControlCenter() {
       {/* Footer */}
       <footer className="pt-4 border-t text-center" style={{ borderColor: "#141c2e" }}>
         <p className="text-[10px] text-[#1e3050] font-mono">
-          TradeAI v12.0.0 · 4 Agents · Groq + Gemini · Multi-Strategy · Deterministico
+          TradeAI v12.0.0 · 3 Agents · Multi-Strategy · Deterministico
         </p>
       </footer>
 

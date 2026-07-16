@@ -49,6 +49,9 @@ class WorkerTradeOut(BaseModel):
     opened_at:             datetime
     closed_at:             datetime | None
     duration_minutes:      float | None
+    # Unrealized P&L for open trades
+    unrealized_pnl:        float | None = None
+    unrealized_pnl_pct:    float | None = None
 
 
 class WorkerRiskOut(BaseModel):

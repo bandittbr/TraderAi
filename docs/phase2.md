@@ -296,7 +296,7 @@
 
 ### Concluído
 
-- [x] **Brain**: Geração de texto via Groq (LLaMA 3.3-70B) ou Gemini 2.0 Flash
+- [x] **Brain**: Geração de texto via Gemini 2.0 Flash
 - [x] **Visual Generator**: Imagens para post com matplotlib
 - [x] **Scheduler**: 4 posts/dia (8h, 12h, 18h, 22h UTC)
 - [x] **Token Manager**: Renovação automática 7 dias antes de expirar
@@ -304,7 +304,6 @@
 - [x] **Context Builder**: BTC price, regime, P&L, notícias + sentimento
 - [x] **Influencer Dashboard**: Métricas completas no frontend
 - [x] Endpoints REST (setup, status, metrics, posts, tokens)
-- [x] Auto-detecção de provider (Groq vs Gemini pelo prefixo da chave)
 - [x] Endpoints de verificação e atualização de token sem refazer setup
 
 ### Serviços criados
@@ -356,7 +355,7 @@ Sem auth         Contexto        Strategy Lab     Trade Mgmt         PostgreSQL
 - Node.js 18+
 - `.env` configurado (ver `.env.example`)
 - Conta Binance (opcional — dados públicos via REST)
-- Chave Groq ou Gemini (para Fase 14 — Biel Agent)
+- Chave Gemini (para Fase 14 — Biel Agent)
 
 ```bash
 # Backend

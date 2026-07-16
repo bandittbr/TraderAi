@@ -18,8 +18,8 @@ from app.services.signal_analytics.regime_classifier import RegimeResult
 logger = logging.getLogger(__name__)
 
 # ── Constantes ────────────────────────────────────────────────────────────────
-MIN_CONFIDENCE     = 65   # score mínimo de direção
-MIN_CONFLUENCE_PCT = 70   # % mínima de módulos concordando
+MIN_CONFIDENCE     = 55   # score mínimo de direção (reduzido de 65)
+MIN_CONFLUENCE_PCT = 60   # % mínima de módulos concordando (reduzido de 70)
 MAX_LEVERAGE       = 3
 MIN_LEVERAGE       = 1
 
@@ -184,6 +184,7 @@ class WorkerSignalEngine:
         - MACD (peso 20%)
         - Market structure (peso 25%)
         - Regime alignment (peso 15%)
+        FIX: score começa em 50 e ranges são mais sensíveis para SHORT
         """
         score = 50.0  # neutro
         reasons = []
@@ -208,6 +209,20 @@ class WorkerSignalEngine:
             elif e9 < e21 and e50 < e200:
                 ema_alignment = -20.0  # bear parcial
                 reasons.append("EMA: bear parcial")
+            elif e9 > e21:
+                ema_alignment = 10.0   # bull mínimo
+                reasons.append("EMA: bull leve")
+            elif e9 < e21:
+                ema_alignment = -10.0  # bear mínimo
+                reasons.append("EMA: bear leve")
+        elif e9 is not None and e21 is not None:
+            # Fallback com apenas EMA9 e EMA21
+            if e9 > e21:
+                ema_alignment = 15.0
+                reasons.append("EMA9>21: bull")
+            else:
+                ema_alignment = -15.0
+                reasons.append("EMA9<21: bear")
         score += ema_alignment
 
         # MACD
@@ -237,7 +252,9 @@ class WorkerSignalEngine:
         elif regime == "BEAR":
             score -= 5.0
 
-        direction = "LONG" if score > 55 else ("SHORT" if score < 45 else "NEUTRAL")
+        # FIX: ranges mais amplos para detectar SHORT
+        # Antes: LONG > 55, SHORT < 45, NEUTRAL 45-55
+        direction = "LONG" if score > 53 else ("SHORT" if score < 47 else "NEUTRAL")
         return score, direction, " | ".join(reasons) if reasons else "neutro"
 
     def _compute_module_scores(
@@ -252,35 +269,42 @@ class WorkerSignalEngine:
         """
         Scores por módulo: positivo = bullish, negativo = bearish.
         Usa timeframe 15m para entrada, 1h como filtro.
+        FIX: módulos agora contribuem mais fortemente para SHORT
         """
         scores: dict[str, float] = {}
 
-        # Técnico (15m)
+        # Técnico (15m) — FIX: ranges expandidos para detectar bearish
         tech = 0.0
         rsi = getattr(ind_15m, "rsi", 50)
         if rsi is not None:
             if 40 <= rsi <= 60:
                 tech += 5.0   # RSI neutro = OK para qualquer direção
-            elif rsi > 70:
-                tech -= 10.0  # overbought = bearish bias
-            elif rsi < 30:
-                tech += 10.0  # oversold = bullish bias
+            elif rsi > 65:
+                tech -= 12.0  # overbought = bearish bias (antes -10)
+                logger.debug(f"[Worker] RSI overbought ({rsi:.0f}) → bearish")
+            elif rsi > 55:
+                tech -= 5.0   # RSI alto = leve bearish
+            elif rsi < 35:
+                tech += 12.0  # oversold = bullish bias (antes +10)
+                logger.debug(f"[Worker] RSI oversold ({rsi:.0f}) → bullish")
+            elif rsi < 45:
+                tech += 5.0   # RSI baixo = leve bullish
 
         macd = getattr(ind_15m, "macd", None)
         macd_sig = getattr(ind_15m, "macd_signal", None)
         if macd is not None and macd_sig is not None:
             if macd > macd_sig:
-                tech += 10.0
+                tech += 12.0  # antes 10
             elif macd < macd_sig:
-                tech -= 10.0
+                tech -= 12.0  # antes 10
 
         e9 = getattr(ind_15m, "ema_9", None)
         e21 = getattr(ind_15m, "ema_21", None)
         if e9 is not None and e21 is not None:
             if e9 > e21:
-                tech += 5.0
+                tech += 8.0   # antes 5
             elif e9 < e21:
-                tech -= 5.0
+                tech -= 8.0   # antes 5
         scores["technical"] = tech
 
         # Structure
@@ -297,7 +321,7 @@ class WorkerSignalEngine:
                 struct_score = 5.0
         scores["structure"] = struct_score
 
-        # SMC
+        # SMC — FIX: ranges expandidos
         smc_score = 0.0
         if smc:
             sweep_buy = getattr(smc, "has_recent_buy_sweep", False)
@@ -306,14 +330,15 @@ class WorkerSignalEngine:
             fvg_bear = getattr(smc, "has_bearish_fvg", False)
 
             if sweep_sell:
-                smc_score += 10.0  # sell-side sweep = liquidity taken = bullish
+                smc_score += 12.0  # antes 10
                 logger.debug(f"[Worker] SMC: sell sweep → bullish")
             if sweep_buy:
-                smc_score -= 10.0  # buy-side sweep = bearish
+                smc_score -= 12.0  # antes 10
+                logger.debug(f"[Worker] SMC: buy sweep → bearish")
             if fvg_bull:
-                smc_score += 8.0
+                smc_score += 10.0  # antes 8
             if fvg_bear:
-                smc_score -= 8.0
+                smc_score -= 10.0  # antes 8
 
             liq_score = getattr(smc, "liquidity_score", 50)
             if liq_score > 70:
@@ -337,16 +362,16 @@ class WorkerSignalEngine:
                 ctx_score += news * 5.0
         scores["context"] = ctx_score
 
-        # Regime
+        # Regime — FIX: contribuição maior
         reg_score = 0.0
         if regime == "BULL":
-            reg_score = 15.0
+            reg_score = 18.0  # antes 15
         elif regime == "BEAR":
-            reg_score = -15.0
+            reg_score = -18.0  # antes -15
         elif regime == "SIDEWAYS":
-            reg_score = 0.0
+            reg_score = 3.0   # antes 0 — sideways permite trades de reversão
         elif regime == "HIGH_VOLATILITY":
-            reg_score = 5.0  # oportunidade, mas com cautela
+            reg_score = 8.0  # antes 5 — oportunidade, mas com cautela
         scores["regime"] = reg_score
 
         return scores

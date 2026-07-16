@@ -41,6 +41,9 @@ class PaperTradeResponse(BaseModel):
     status:       str
     opened_at:    datetime
     closed_at:    Optional[datetime]
+    # Unrealized P&L for open trades
+    unrealized_pnl:     Optional[float] = None
+    unrealized_pnl_pct: Optional[float] = None
 
     model_config = {"from_attributes": True}
 

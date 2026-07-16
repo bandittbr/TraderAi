@@ -377,26 +377,44 @@ async def _process_signal_for_paper_trading(symbol: str, tf: str, ind) -> None:
             smc        = smc,
         ))
 
-        # V7 — Worker Agent 24/7 (quando timeframe = 1h)
+        # V7 — Worker Agent 24/7 (roda em 1h e 15m)
+        # Worker usa 1h para direção + 15m para entrada
+        # FIX: agora roda em ambos os timeframes para aumentar oportunidades
+        ind_15m = None
+        try:
+            ind_15m = await indicator_calculator.get_latest(symbol, "15m")
+        except Exception:
+            pass
+
         if tf == "1h":
             try:
                 from app.services.worker.trade_engine import worker_engine
-                # Worker usa 1h para direção + 15m para entrada
-                # FIX: store.get_indicator_15m não existia — o Worker sempre caía
-                # no fallback e usava o indicador 1h como se fosse 15m.
-                ind_15m = None
-                try:
-                    ind_15m = await indicator_calculator.get_latest(symbol, "15m")
-                except Exception:
-                    pass
                 await worker_engine.process_signal(
                     symbol=symbol, price_1h=ind, price_15m=ind_15m or ind,
                     regime=regime_result, context=context,
                     structure=structure, smc=smc, weights=weights,
-                    current_price=price,  # FIX: MarketIndicator não tem .close/.price
+                    current_price=price,
                 )
             except Exception as _we:
                 logger.debug("[worker] skip: %s", _we)
+
+        # Multi-Agent Trading System — executa todos os agentes em ambos timeframes
+        try:
+            from app.services.agents import multi_agent_engine
+            await multi_agent_engine.process_all(
+                symbol=symbol,
+                price_1h=ind if tf == "1h" else None,
+                price_15m=ind if tf == "15m" else ind_15m or ind,
+                regime=regime_result,
+                context=context,
+                structure=structure,
+                smc=smc,
+                current_price=price,
+            )
+            # Gerencia trades abertos
+            await multi_agent_engine.manage_open_trades(symbol, price)
+        except Exception as _mae:
+            logger.debug("[multi-agent] skip: %s", _mae)
 
         struct_label = structure.structure_label if structure else "N/A"
         liq_score    = smc.liquidity_score if smc else 0
@@ -434,7 +452,6 @@ async def start_background_tasks() -> list:
         asyncio.create_task(alpha_sync_loop(),         name="alpha_sync"),        # Phase 9
         asyncio.create_task(robustness_sync_loop(),   name="robustness_sync"),   # Phase 10
         asyncio.create_task(strategy_sync_loop(),    name="strategy_sync"),     # Phase 11
-        asyncio.create_task(groq_agent_loop(),        name="groq_agent"),       # Groq LLM Agent
     ]
     logger.info(f"Background tasks iniciadas: {[t.get_name() for t in tasks]}")
     return tasks
@@ -558,26 +575,4 @@ async def strategy_sync_loop() -> None:
         await asyncio.sleep(STRATEGY_SYNC_INTERVAL_SECS)
 
 
-# ── Groq Agent Loop ──────────────────────────────────────────────────────────
 
-GROQ_LOOP_INTERVAL_SECS = 60  # A cada 60s (máximo do free tier: 1000 RPD)
-
-
-async def groq_agent_loop() -> None:
-    """Groq Agent: usa LLM para decisões de trading a cada 60s."""
-    import os
-    await asyncio.sleep(30)  # Aguarda dados iniciais
-
-    # Verificar se GROQ_API_KEY está configurada
-    if not os.environ.get("GROQ_API_KEY"):
-        logger.warning("[groq] GROQ_API_KEY não configurada — loop desativado")
-        return
-
-    logger.info("[groq] Iniciando Groq Agent loop (60s)")
-    while True:
-        try:
-            from app.services.groq_agent.trade_engine import groq_engine
-            await groq_engine.process_cycle(symbol="BTCUSDT")
-        except Exception as exc:
-            logger.warning("[groq] Erro no ciclo: %s", exc)
-        await asyncio.sleep(GROQ_LOOP_INTERVAL_SECS)

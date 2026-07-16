@@ -76,7 +76,7 @@ export default function BielSetup({ onSetupDone }: { onSetupDone?: () => void })
         <div style={{ color: "#3d5a80", fontSize: 11, marginTop: 2 }}>Setup inicial — credenciais são salvas no banco de dados do servidor</div>
       </div>
 
-      {field("AI API Key (Groq gsk_... ou Gemini AIza/AQ.)", "gemini_api_key", "gsk_... ou AIza...", "password")}
+      {field("AI API Key (Gemini AIza/AQ.)", "gemini_api_key", "AIza... ou AQ...", "password")}
       {field("Instagram Access Token", "access_token", "EAAX...", "password")}
       {field("Facebook App ID", "app_id", "1654543728935583")}
       {field("Facebook App Secret", "app_secret", "dca45c43...", "password")}

@@ -123,49 +123,6 @@ class AIAnalyst:
                 ],
             }
 
-            # ── Groq Agent ─────────────────────────────────────────────────
-            from app.models.groq_agent import GroqTrade, GroqAccount, GroqThinking
-            groq_trades = await session.execute(
-                select(GroqTrade).where(GroqTrade.opened_at >= cutoff).order_by(desc(GroqTrade.opened_at))
-            )
-            groq_trades = list(groq_trades.scalars().all())
-            groq_acc = await session.scalar(select(GroqAccount))
-
-            # Últimos pensamentos do Groq
-            groq_thoughts = await session.execute(
-                select(GroqThinking).order_by(desc(GroqThinking.created_at)).limit(10)
-            )
-            groq_thoughts = list(groq_thoughts.scalars().all())
-
-            ctx["groq"] = {
-                "balance": groq_acc.balance if groq_acc else 0,
-                "total_trades": len(groq_trades),
-                "recent_trades": [
-                    {
-                        "symbol": t.symbol,
-                        "side": t.trade_side,
-                        "entry": t.entry_price,
-                        "exit": t.exit_price,
-                        "pnl_pct": t.net_pnl_pct,
-                        "status": t.status,
-                        "confidence": t.confidence,
-                        "regime": t.regime_at_entry,
-                    }
-                    for t in groq_trades[:15]
-                ],
-                "recent_thoughts": [
-                    {
-                        "symbol": th.symbol,
-                        "action": th.action,
-                        "confidence": th.confidence,
-                        "reasoning": th.reasoning[:500] if th.reasoning else None,
-                        "error": th.error,
-                        "created": th.created_at.isoformat() if th.created_at else None,
-                    }
-                    for th in groq_thoughts
-                ],
-            }
-
             # ── Market Context ─────────────────────────────────────────────
             from app.models.market_data import MarketCandle, MarketIndicator, MarketRegime
             from app.models.market_context import FearGreed, FundingRate, OpenInterest

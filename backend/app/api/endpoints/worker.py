@@ -15,11 +15,11 @@ from app.schemas.worker import (
 )
 from app.services.worker.trade_engine import worker_engine, INITIAL_BALANCE
 from app.services.worker.risk_manager import worker_risk
+from app.services.market_data.store import store
 
 # Import agents for leaderboard
 from app.models.scalper import ScalperTrade, ScalperAccount
 from app.models.paper_trading import PaperTrade, PaperAccount
-from app.models.groq_agent import GroqTrade
 
 router = APIRouter()
 
@@ -55,6 +55,52 @@ async def get_worker_trades(
         result = await session.execute(q)
         trades = list(result.scalars().all())
     return [WorkerTradeOut.model_validate(t) for t in trades]
+
+
+# ── GET /worker/open-trades ──────────────────────────────────────────────────
+@router.get("/open-trades", response_model=list[WorkerTradeOut])
+async def get_worker_open_trades():
+    """Trades abertos com P&L não realizado (unrealized) em tempo real."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(WorkerTrade).where(WorkerTrade.status == "OPEN")
+        )
+        open_trades = list(result.scalars().all())
+
+    # Buscar preço atual para cada símbolo
+    symbols = list(set(t.symbol for t in open_trades))
+    current_prices = {}
+    for sym in symbols:
+        stat = await store.get_stats(sym)
+        if stat:
+            current_prices[sym] = stat.price
+
+    # Calcular unrealized P&L
+    for trade in open_trades:
+        current_price = current_prices.get(trade.symbol)
+        if current_price and current_price > 0:
+            if trade.trade_side == "LONG":
+                pnl_pct = (current_price - trade.entry_price) / trade.entry_price
+            else:
+                pnl_pct = (trade.entry_price - current_price) / trade.entry_price
+
+            # Com alavancagem
+            pnl_pct_lev = pnl_pct * trade.leverage
+            # Taxas (0.16% round-trip)
+            fee_pct = 0.0016 * trade.leverage
+            net_pnl_pct = pnl_pct_lev - fee_pct
+
+            # P&L em USD
+            pnl_usd = trade.quantity * abs(current_price - trade.entry_price) * trade.leverage
+            if trade.trade_side == "SHORT":
+                pnl_usd = -pnl_usd if current_price > trade.entry_price else pnl_usd
+            else:
+                pnl_usd = pnl_usd if current_price > trade.entry_price else -pnl_usd
+
+            trade.unrealized_pnl = round(pnl_usd, 2)
+            trade.unrealized_pnl_pct = round(net_pnl_pct * 100, 2)
+
+    return [WorkerTradeOut.model_validate(t) for t in open_trades]
 
 
 # ── GET /worker/stats ────────────────────────────────────────────────────────
@@ -290,38 +336,6 @@ async def get_agent_leaderboard(days: int = Query(30, ge=1, le=365)):
         except Exception as e:
             agents.append(AgentLeaderboardEntry(
                 name="Paper", status="idle",
-                win_rate=0, profit_factor=0, total_pnl_pct=0, total_trades=0,
-                net_win_rate=0, net_profit_factor=0, total_net_pnl_pct=0,
-            ))
-
-        # ── Groq ──
-        try:
-            gt = await session.execute(
-                select(GroqTrade).where(
-                    GroqTrade.status == "CLOSED",
-                    GroqTrade.closed_at >= cutoff,
-                )
-            )
-            groq_trades = list(gt.scalars().all())
-            g_pnl = lambda t: t.net_pnl_pct if t.net_pnl_pct is not None else t.pnl_pct or 0
-            g_wins = [t for t in groq_trades if g_pnl(t) > 0]
-            g_wr = len(g_wins) / len(groq_trades) * 100 if groq_trades else 0
-            g_gp = sum(g_pnl(t) for t in g_wins)
-            g_gl = abs(sum(g_pnl(t) for t in groq_trades if g_pnl(t) <= 0))
-            g_pf = g_gp / g_gl if g_gl > 0 else 0
-            g_total = sum(g_pnl(t) for t in groq_trades)
-            g_total_gross = sum(t.pnl_pct or 0 for t in groq_trades)
-            agents.append(AgentLeaderboardEntry(
-                name="Groq", status="running",
-                win_rate=round(g_wr, 1), profit_factor=round(g_pf, 3),
-                total_pnl_pct=round(g_total_gross, 2),
-                total_trades=len(groq_trades),
-                net_win_rate=round(g_wr, 1), net_profit_factor=round(g_pf, 3),
-                total_net_pnl_pct=round(g_total, 2),
-            ))
-        except Exception as e:
-            agents.append(AgentLeaderboardEntry(
-                name="Groq", status="idle",
                 win_rate=0, profit_factor=0, total_pnl_pct=0, total_trades=0,
                 net_win_rate=0, net_profit_factor=0, total_net_pnl_pct=0,
             ))

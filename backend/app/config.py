@@ -60,7 +60,6 @@ class Settings(BaseSettings):
 
     # ── AI / LLM ────────────────────────────────────────────────────────────────
     gemini_api_key: str = ""
-    groq_api_key: str = ""
 
     # ── Trade Management Engine (Fase 12 / V7) ────────────────────────────────
     paper_max_hours_open:         float = 48.0   # Time Stop: fechar após N horas

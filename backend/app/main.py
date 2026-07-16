@@ -68,6 +68,10 @@ async def lifespan(app: FastAPI):
     backup_tasks = await start_backup_scheduler()
     bg_tasks.extend(backup_tasks)
 
+    # Multi-Agent Trading System — registra agentes
+    from app.services.agents import register_all_agents
+    register_all_agents()
+
     logger.info("Sistema pronto para receber requisições.")
 
     yield  # Servidor em execução

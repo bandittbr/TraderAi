@@ -18,4 +18,4 @@ from app.models.scalper import ScalperAccount, ScalperTrade, ScalperRiskDaily, S
 from app.models.worker import WorkerAccount, WorkerTrade, WorkerRiskDaily
 from app.models import biel  # noqa: F401
 from app.models import trade_activity  # noqa: F401
-from app.models import groq_agent  # noqa: F401
+from app.models import agent_trade  # noqa: F401
