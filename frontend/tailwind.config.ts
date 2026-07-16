@@ -9,19 +9,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Paleta TradeAI — tema escuro financeiro
-        background: "#0a0e1a",
-        surface: "#111827",
-        "surface-2": "#1f2937",
-        border: "#1f2937",
+        background: "#050816",
+        surface: "#080c14",
+        "surface-2": "#0d1525",
+        border: "#1a2540",
         primary: "#3b82f6",
-        "primary-hover": "#2563eb",
+        "primary-neon": "#60a5fa",
         success: "#10b981",
         warning: "#f59e0b",
         danger: "#ef4444",
-        muted: "#6b7280",
-        "text-primary": "#f9fafb",
-        "text-secondary": "#9ca3af",
+        muted: "#2d4060",
+        "text-primary": "#f1f5f9",
+        "text-secondary": "#8aa4c8",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
@@ -29,6 +28,14 @@ const config: Config = {
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "slide-in": "slide-in 0.4s ease-out",
+        "fade-in": "fade-in 0.6s ease-out",
+      },
+      boxShadow: {
+        "neon-blue": "0 0 15px rgba(59, 130, 246, 0.3)",
+        "neon-green": "0 0 15px rgba(16, 185, 129, 0.3)",
+        "neon-purple": "0 0 15px rgba(139, 92, 246, 0.3)",
       },
     },
   },

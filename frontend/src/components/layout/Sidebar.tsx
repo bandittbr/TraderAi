@@ -19,7 +19,8 @@ const NAV_ITEMS: NavGroup[] = [
   {
     group: null,
     items: [
-      { label: "Control Center", icon: "home", href: "/", external: false },
+      { label: "Cockpit",       icon: "cockp", href: "/cockpit",         external: false },
+      { label: "Control Center", icon: "home", href: "/",               external: false },
     ],
   },
   {
@@ -29,15 +30,15 @@ const NAV_ITEMS: NavGroup[] = [
       { label: "Trade Mgmt",   icon: "trade", href: "/trade-management", external: false },
     ],
   },
-{
-      group: "TRADERS AGENTS",
-      items: [
-        { label: "Paper",    icon: "paper", href: "/paper-trading", external: false },
-        { label: "Scalper",  icon: "scalp", href: "/scalper",       external: false },
-        { label: "Worker",   icon: "workr", href: "/worker",        external: false },
-        { label: "Agents",   icon: "agent", href: "/agents",        external: false },
-      ],
-    },
+  {
+    group: "TRADERS & AGENTS",
+    items: [
+      { label: "Paper",    icon: "paper", href: "/paper-trading", external: false },
+      { label: "Scalper",  icon: "scalp", href: "/scalper",       external: false },
+      { label: "Worker",   icon: "workr", href: "/worker",        external: false },
+      { label: "Agents",   icon: "agent", href: "/agents",        external: false },
+    ],
+  },
   {
     group: "CORRETORA",
     items: [
@@ -45,7 +46,7 @@ const NAV_ITEMS: NavGroup[] = [
     ],
   },
   {
-    group: "ANALISE",
+    group: "ANÁLISE",
     items: [
       { label: "Analytics",       icon: "analy", href: "/analytics",  external: false },
       { label: "Alpha Discovery", icon: "alpha", href: "/alpha",       external: false },
@@ -54,7 +55,7 @@ const NAV_ITEMS: NavGroup[] = [
     ],
   },
   {
-    group: "INFLUENCER",
+    group: "SOCIAL",
     items: [
       { label: "Influencer",  icon: "influ", href: "/influencer", external: false },
     ],
@@ -68,11 +69,12 @@ const NAV_ITEMS: NavGroup[] = [
 ];
 
 const ICON_MAP: Record<string, string> = {
+  cockp: "🎛",
   home:  "⌘",
   chart: "◈",
   paper: "◎",
   trade: "◉",
-  scalp: "⚡︎",   // lightning bolt with text variant (monochrome)
+  scalp: "⚡︎",
   workr: "⚙",
   broker: "🏦",
   analy: "▲",
@@ -107,7 +109,7 @@ export default function Sidebar() {
         </div>
         <div className="leading-none">
           <div className="text-sm font-bold text-white tracking-wide">TradeAI</div>
-          <div className="text-[9px] text-[#3b4a6b] tracking-widest mt-0.5">QUANT PLATFORM</div>
+          <div className="text-[9px] text-[#3b4a6b] tracking-widest mt-0.5">AI TRADING COCKPIT</div>
         </div>
       </div>
 

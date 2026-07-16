@@ -4,17 +4,25 @@
 
 /* ── Variáveis globais ──────────────────────────────────────────────────────── */
 :root {
-  --color-bg: #0a0e1a;
-  --color-surface: #111827;
-  --color-surface-2: #1f2937;
-  --color-border: #1f2937;
+  --color-bg: #050816;
+  --color-surface: #080c14;
+  --color-surface-2: #0d1525;
+  --color-border: #1a2540;
   --color-primary: #3b82f6;
+  --color-primary-neon: #60a5fa;
   --color-success: #10b981;
+  --color-success-neon: #34d399;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
-  --color-muted: #6b7280;
-  --color-text: #f9fafb;
-  --color-text-secondary: #9ca3af;
+  --color-danger-neon: #f87171;
+  --color-muted: #2d4060;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #8aa4c8;
+  --color-glass: rgba(5, 8, 22, 0.6);
+  --glass-border: rgba(26, 37, 64, 0.6);
+  --neon-blue: 0 0 10px rgba(59, 130, 246, 0.3);
+  --neon-green: 0 0 10px rgba(16, 185, 129, 0.3);
+  --neon-purple: 0 0 10px rgba(139, 92, 246, 0.3);
 }
 
 /* ── Reset e base ────────────────────────────────────────────────────────────── */
@@ -34,29 +42,94 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Glassmorphism utility ───────────────────────────────────────────────────── */
+.glass {
+  background: var(--color-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-hover:hover {
+  background: rgba(5, 8, 22, 0.8);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+/* ── Neon glow utilities ─────────────────────────────────────────────────────── */
+.neon-blue {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.2), inset 0 0 15px rgba(59, 130, 246, 0.05);
+}
+.neon-green {
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.2), inset 0 0 15px rgba(16, 185, 129, 0.05);
+}
+.neon-purple {
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.2), inset 0 0 15px rgba(139, 92, 246, 0.05);
+}
+
+/* ── Card padrão do cockpit ───────────────────────────────────────────────────── */
+.cockpit-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+.cockpit-card:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.08);
+}
+
 /* ── Scrollbar personalizada ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: var(--color-surface);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-surface-2);
-  border-radius: 3px;
+  background: var(--color-muted);
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-muted);
+  background: #3d5a80;
 }
 
-/* ── Animação de piscar para indicadores de status ───────────────────────────── */
+/* ── Animações ────────────────────────────────────────────────────────────────── */
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
 }
 
-.status-dot-online  { background-color: var(--color-success); }
-.status-dot-offline { background-color: var(--color-danger); animation: blink 1.5s infinite; }
-.status-dot-warning { background-color: var(--color-warning); animation: blink 2s infinite; }
-.status-dot-loading { background-color: var(--color-muted); animation: blink 1s infinite; }
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); }
+  50%      { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.4s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+.status-dot-online  { background-color: var(--color-success); box-shadow: 0 0 8px var(--color-success); }
+.status-dot-offline { background-color: var(--color-danger);  box-shadow: 0 0 8px var(--color-danger);  animation: blink 1.5s infinite; }
+.status-dot-warning { background-color: var(--color-warning); box-shadow: 0 0 8px var(--color-warning);  animation: blink 2s infinite; }
+.status-dot-loading { background-color: var(--color-muted);                                             animation: blink 1s infinite; }
+
+/* ── Fonte mono para dados financeiros ─────────────────────────────────────── */
+.font-mono {
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", monospace;
+}
